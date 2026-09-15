@@ -1,0 +1,63 @@
+package com.babunator.scanner
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+
+class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 1) {
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE prices(symbol TEXT NOT NULL, date TEXT NOT NULL, close REAL NOT NULL, PRIMARY KEY(symbol,date))")
+        db.execSQL("CREATE TABLE runs(id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT NOT NULL, timeframe TEXT NOT NULL, matched INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE results(run_id INTEGER NOT NULL, symbol TEXT NOT NULL, timeframe TEXT NOT NULL, close REAL NOT NULL, note TEXT)")
+    }
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+
+    fun upsertPrices(symbol: String, rows: List<Candle>) {
+        writableDatabase.beginTransaction()
+        try {
+            val cv = ContentValues()
+            for (r in rows) {
+                cv.clear(); cv.put("symbol", symbol); cv.put("date", r.date); cv.put("close", r.close)
+                writableDatabase.insertWithOnConflict("prices", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            writableDatabase.setTransactionSuccessful()
+        } finally { writableDatabase.endTransaction() }
+    }
+
+    fun getHistory(symbol: String, limit: Int = 400): List<Candle> {
+        val out = mutableListOf<Candle>()
+        val c = readableDatabase.rawQuery("SELECT date,close FROM prices WHERE symbol=? ORDER BY date DESC LIMIT ?", arrayOf(symbol, limit.toString()))
+        c.use { while (it.moveToNext()) out += Candle(it.getString(0), it.getDouble(1)) }
+        return out.asReversed()
+    }
+
+    fun symbols(): List<String> {
+        val out = mutableListOf<String>()
+        val c = readableDatabase.rawQuery("SELECT DISTINCT symbol FROM prices ORDER BY symbol", null)
+        c.use { while (it.moveToNext()) out += it.getString(0) }
+        return out
+    }
+
+    fun saveRun(timeframe: String, matches: List<Match>): Long {
+        val cv = ContentValues(); cv.put("created", java.time.LocalDateTime.now().toString()); cv.put("timeframe", timeframe); cv.put("matched", matches.size)
+        val id = writableDatabase.insert("runs", null, cv)
+        for (m in matches) {
+            val r = ContentValues(); r.put("run_id", id); r.put("symbol", m.symbol); r.put("timeframe", m.timeframe); r.put("close", m.close); r.put("note", m.note)
+            writableDatabase.insert("results", null, r)
+        }
+        return id
+    }
+
+    fun recentRuns(limit: Int = 30): List<String> {
+        val out = mutableListOf<String>(); val c = readableDatabase.rawQuery("SELECT id,created,timeframe,matched FROM runs ORDER BY id DESC LIMIT ?", arrayOf(limit.toString()))
+        c.use { while (it.moveToNext()) out += "#${it.getLong(0)}  ${it.getString(1)}  ${it.getString(2)}  matched=${it.getInt(3)}" }
+        return out
+    }
+
+    fun results(runId: Long): List<String> {
+        val out = mutableListOf<String>(); val c = readableDatabase.rawQuery("SELECT symbol,timeframe,close,note FROM results WHERE run_id=? ORDER BY symbol", arrayOf(runId.toString()))
+        c.use { while (it.moveToNext()) out += "${it.getString(0)}  ${it.getString(1)}  close=${it.getDouble(2)}  ${it.getString(3) ?: ""}" }
+        return out
+    }
+}
