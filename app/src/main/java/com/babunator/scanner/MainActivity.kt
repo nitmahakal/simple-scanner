@@ -519,14 +519,10 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun verticalScroll(): ScrollView {
-        val root = LinearLayout(this).apply {
+    private fun verticalScroll(): LinearLayout {
+        return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(18, 8, 18, 18)
-        }
-
-        return ScrollView(this).apply {
-            addView(root)
         }
     }
 
