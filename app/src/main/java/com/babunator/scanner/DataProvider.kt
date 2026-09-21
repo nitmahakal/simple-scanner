@@ -5,6 +5,8 @@ import java.io.BufferedReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
+import java.time.ZoneId
 
 class DataProvider {
 
@@ -60,9 +62,44 @@ class DataProvider {
                     "?range=${if (days <= 20) "15d" else "2y"}" +
                     "&interval=1d&events=div%2Csplits"
 
-        val root = JSONObject(get(url))
+        return parseDaily(symbol, get(url))
+    }
+
+    fun fetchDailySince(symbol: String, fromDate: LocalDate): List<Candle> {
+        val q = URLEncoder.encode(
+            "${symbol}.NS",
+            "UTF-8"
+        )
+
+        val period1 = fromDate
+            .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+            .toEpochSecond()
+
+        val period2 = LocalDate.now()
+            .plusDays(1)
+            .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+            .toEpochSecond()
+
+        val url =
+            "https://query1.finance.yahoo.com/v8/finance/chart/$q" +
+                    "?period1=$period1" +
+                    "&period2=$period2" +
+                    "&interval=1d&events=div%2Csplits"
+
+        return parseDaily(symbol, get(url))
+    }
+
+    private fun parseDaily(symbol: String, text: String): List<Candle> {
+        val root = JSONObject(text)
 
         val chart = root.getJSONObject("chart")
+
+        val error = chart.optJSONObject("error")
+        if (error != null && !error.isNull("description")) {
+            throw IllegalStateException(
+                error.optString("description", "Yahoo chart error for $symbol")
+            )
+        }
 
         val resultArray = chart.optJSONArray("result")
             ?: throw IllegalStateException("No chart result for $symbol")
@@ -97,7 +134,7 @@ class DataProvider {
 
             val d = java.time.Instant
                 .ofEpochSecond(ts.getLong(i))
-                .atZone(java.time.ZoneId.of("Asia/Kolkata"))
+                .atZone(ZoneId.of("Asia/Kolkata"))
                 .toLocalDate()
                 .toString()
 
