@@ -264,8 +264,27 @@ class MainActivity : AppCompatActivity() {
             },
             lp()
         )
+        lifecycleScope.launch {
+            while (true) {
+                val current = AppDb(this@MainActivity).getUpdateStatus()
+        
+                if (current != null) {
+                    progressText.text =
+                        "${current.processed} / ${current.total}"
+        
+                    statsText.text =
+                        "Successful: ${current.successful}\n" +
+                        "Failed: ${current.failed}\n" +
+                        "Retry: ${current.retryCount}\n" +
+                        "Last update: ${current.lastUpdateTime ?: "—"}"
+                }
+        
+                delay(1000)
+            }
+        }
 
         content.addView(root)
+        
     }
 
     // ---------------------------------------------------------
