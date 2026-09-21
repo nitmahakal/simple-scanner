@@ -175,10 +175,7 @@ class MainActivity : AppCompatActivity() {
         val db = AppDb(this)
         val updateStatus = db.getUpdateStatus()
         val workManager = WorkManager.getInstance(this)
-        val updateWorkInfos = workManager.getWorkInfosForUniqueWork("nse_data_update").get()
-        val updateRunning = updateWorkInfos.any {
-            !it.state.isFinished
-        }
+        val updateRunning = false
         var progressText: TextView
         var statsText: TextView
         
