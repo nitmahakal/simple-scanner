@@ -582,7 +582,7 @@ class MainActivity : AppCompatActivity() {
     private fun showHistory() {
         val db = AppDb(this)
         val runs = db.recentRuns()
-
+    
         if (runs.isEmpty()) {
             AlertDialog.Builder(this)
                 .setMessage("No saved scan results yet.")
@@ -590,29 +590,45 @@ class MainActivity : AppCompatActivity() {
                 .show()
             return
         }
-
+    
         AlertDialog.Builder(this)
             .setTitle("Scan History")
             .setItems(runs.toTypedArray()) { _, which ->
-
-                val id = runs[which]
+    
+                val selectedRun = runs[which]
+    
+                val id = selectedRun
                     .substringAfter('#')
                     .substringBefore(' ')
                     .toLong()
-
-                AlertDialog.Builder(this)
-                    .setTitle(runs[which])
-                    .setMessage(
-                        db.results(id)
-                            .joinToString("\n")
+    
+                val results = db.results(id)
+    
+                val message = buildString {
+                    append("SCAN DETAILS\n")
+                    append("==============================\n\n")
+    
+                    append(selectedRun)
+                    append("\n\n")
+    
+                    append("RESULTS\n")
+                    append("==============================\n\n")
+    
+                    append(
+                        results
+                            .joinToString("\n\n")
                             .ifEmpty { "No matches" }
                     )
+                }
+    
+                AlertDialog.Builder(this)
+                    .setTitle("Scan #$id")
+                    .setMessage(message)
                     .setPositiveButton("OK", null)
                     .show()
             }
             .show()
     }
-
     private fun verticalScroll(): ViewGroup {
         val scroll = android.widget.ScrollView(this)
     
