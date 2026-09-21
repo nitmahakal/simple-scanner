@@ -174,6 +174,8 @@ class MainActivity : AppCompatActivity() {
 
         val db = AppDb(this)
         val updateStatus = db.getUpdateStatus()
+        var progressText: TextView
+        var statsText: TextView
         
         status = TextView(this).apply {
             text = if (updateStatus == null) {
@@ -220,36 +222,33 @@ class MainActivity : AppCompatActivity() {
             label("Progress")
         )
         
-        root.addView(
-            TextView(this).apply {
-                text = if (updateStatus == null) {
-                    "0 / 0"
-                } else {
-                    "${updateStatus.processed} / ${updateStatus.total}"
-                }
-                textSize = 18f
-            },
-            lp()
-        )
+        progressText = TextView(this).apply {
+            text = if (updateStatus == null) {
+                "0 / 0"
+            } else {
+                "${updateStatus.processed} / ${updateStatus.total}"
+            }
+            textSize = 18f
+        }
         
-        root.addView(
-            TextView(this).apply {
-                text = if (updateStatus == null) {
-                    "Successful: 0\n" +
-                            "Failed: 0\n" +
-                            "Retry: 0\n" +
-                            "Last update: —"
-                } else {
-                    "Successful: ${updateStatus.successful}\n" +
-                            "Failed: ${updateStatus.failed}\n" +
-                            "Retry: ${updateStatus.retryCount}\n" +
-                            "Last update: ${updateStatus.lastUpdateTime ?: "—"}"
-                }
-                textSize = 16f
-            },
-            lp()
-        )
-
+        root.addView(progressText, lp())
+        
+        statsText = TextView(this).apply {
+            text = if (updateStatus == null) {
+                "Successful: 0\n" +
+                        "Failed: 0\n" +
+                        "Retry: 0\n" +
+                        "Last update: —"
+            } else {
+                "Successful: ${updateStatus.successful}\n" +
+                        "Failed: ${updateStatus.failed}\n" +
+                        "Retry: ${updateStatus.retryCount}\n" +
+                        "Last update: ${updateStatus.lastUpdateTime ?: "—"}"
+            }
+            textSize = 16f
+        }
+        
+        root.addView(statsText, lp())
 
 
         root.addView(
