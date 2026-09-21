@@ -174,6 +174,11 @@ class MainActivity : AppCompatActivity() {
 
         val db = AppDb(this)
         val updateStatus = db.getUpdateStatus()
+        val workManager = WorkManager.getInstance(this)
+        val updateWorkInfos = workManager.getWorkInfosForUniqueWork("nse_data_update").get()
+        val updateRunning = updateWorkInfos.any {
+            !it.state.isFinished
+        }
         var progressText: TextView
         var statsText: TextView
         
@@ -188,7 +193,18 @@ class MainActivity : AppCompatActivity() {
         
         root.addView(status, lp())
         val updateButton = Button(this).apply {
-            text = "UPDATE DATA"
+            text = if (updateRunning) {
+                "UPDATE IN PROGRESS"
+            } else {
+                "UPDATE DATA"
+            }
+        
+            isEnabled = !updateRunning
+        
+            setOnClickListener {
+                ...
+            }
+        }
         
             setOnClickListener {
                 val workManager = WorkManager.getInstance(this@MainActivity)
