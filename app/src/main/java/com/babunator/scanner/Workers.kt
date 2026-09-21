@@ -7,8 +7,13 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.time.LocalDate
 
-class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
+class UpdateWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+
     override suspend fun doWork(): Result {
         val db = AppDb(applicationContext)
 
@@ -42,15 +47,36 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
             }
 
             for (s in part) {
-                val days = if (db.getHistory(s, 60).size < 60) 500 else 15
+
+                val history = db.getHistory(s, 60)
 
                 var updated = false
 
                 // First attempt.
                 try {
-                    val rows = provider.fetchDaily(s, days)
+                    val rows = if (history.size < 60) {
+                        // New / insufficient history:
+                        // fetch a larger historical range.
+                        provider.fetchDaily(s, 500)
+                    } else {
+                        // Existing history:
+                        // fetch only from the last stored date onward.
+                        // Including the last date allows today's value
+                        // to be refreshed and safely replaced by upsert.
+                        val lastDate = history.lastOrNull()
+                            ?.date
+                            ?.let { LocalDate.parse(it) }
+
+                        if (lastDate != null) {
+                            provider.fetchDailySince(s, lastDate)
+                        } else {
+                            provider.fetchDaily(s, 500)
+                        }
+                    }
+
                     db.upsertPrices(s, rows)
                     updated = true
+
                 } catch (_: Exception) {
                 }
 
@@ -59,9 +85,23 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     retryCount++
 
                     try {
-                        val rows = provider.fetchDaily(s, days)
+                        val rows = if (history.size < 60) {
+                            provider.fetchDaily(s, 500)
+                        } else {
+                            val lastDate = history.lastOrNull()
+                                ?.date
+                                ?.let { LocalDate.parse(it) }
+
+                            if (lastDate != null) {
+                                provider.fetchDailySince(s, lastDate)
+                            } else {
+                                provider.fetchDaily(s, 500)
+                            }
+                        }
+
                         db.upsertPrices(s, rows)
                         updated = true
+
                     } catch (_: Exception) {
                     }
                 }
@@ -94,6 +134,7 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
             }
 
             if (processed >= symbols.size) {
+
                 val finalStatus = db.getUpdateStatus()
 
                 db.saveUpdateStatus(
@@ -102,9 +143,11 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     successful = finalStatus?.successful ?: successful,
                     failed = finalStatus?.failed ?: failed,
                     retryCount = finalStatus?.retryCount ?: retryCount,
-                    lastUpdateTime = java.time.LocalDateTime.now().toString()
+                    lastUpdateTime = LocalDate.now().toString()
                 )
+
             } else {
+
                 val nextRequest = OneTimeWorkRequestBuilder<UpdateWorker>()
                     .setInputData(
                         Data.Builder()
@@ -131,15 +174,20 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     .putInt("retry_count", retryCount)
                     .build()
             )
+
         } catch (_: Exception) {
             // Per-stock retry is already controlled above.
-            // No additional automatic worker retry.
+            // No additional automatic Worker retry.
             Result.failure()
         }
     }
 }
 
-class ScanWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
+class ScanWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+
     override suspend fun doWork(): Result {
         return try {
             val db = AppDb(applicationContext)
@@ -148,7 +196,7 @@ class ScanWorker(appContext: Context, params: WorkerParameters) : CoroutineWorke
             val matches = ScannerEngine(db).scan(symbols, cfg)
             db.saveRun(cfg.timeframe, matches)
             Result.success()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             Result.failure()
         }
     }
