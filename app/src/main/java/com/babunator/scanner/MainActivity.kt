@@ -276,6 +276,25 @@ class MainActivity : AppCompatActivity() {
             while (true) {
                 val current = AppDb(this@MainActivity).getUpdateStatus()
         
+                val updateRunning =
+                    kotlinx.coroutines.withContext(
+                        kotlinx.coroutines.Dispatchers.IO
+                    ) {
+                        WorkManager.getInstance(this@MainActivity)
+                            .getWorkInfosForUniqueWork("nse_data_update")
+                            .get()
+                            .any { !it.state.isFinished }
+                    }
+        
+                updateButton.text =
+                    if (updateRunning) {
+                        "UPDATE IN PROGRESS"
+                    } else {
+                        "UPDATE DATA"
+                    }
+        
+                updateButton.isEnabled = !updateRunning
+        
                 if (current != null) {
                     progressText.text =
                         "${current.processed} / ${current.total}"
