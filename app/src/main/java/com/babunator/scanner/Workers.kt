@@ -10,8 +10,9 @@ import androidx.work.WorkerParameters
 
 class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
+        val db = AppDb(applicationContext)
+
         return try {
-            val db = AppDb(applicationContext)
             val provider = DataProvider()
             val symbols = provider.fetchSymbolList()
 
@@ -45,14 +46,21 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 
                 var updated = false
 
+                // First attempt.
                 try {
-                    db.upsertPrices(s, provider.fetchDaily(s, days))
+                    val rows = provider.fetchDaily(s, days)
+                    db.upsertPrices(s, rows)
                     updated = true
                 } catch (_: Exception) {
+                }
+
+                // Exactly one retry for this stock if the first attempt failed.
+                if (!updated) {
                     retryCount++
 
                     try {
-                        db.upsertPrices(s, provider.fetchDaily(s, days))
+                        val rows = provider.fetchDaily(s, days)
+                        db.upsertPrices(s, rows)
                         updated = true
                     } catch (_: Exception) {
                     }
@@ -78,6 +86,9 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     Data.Builder()
                         .putInt("done", processed)
                         .putInt("total", symbols.size)
+                        .putInt("successful", successful)
+                        .putInt("failed", failed)
+                        .putInt("retry_count", retryCount)
                         .build()
                 )
             }
@@ -120,8 +131,10 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     .putInt("retry_count", retryCount)
                     .build()
             )
-        } catch (e: Exception) {
-            Result.retry()
+        } catch (_: Exception) {
+            // Per-stock retry is already controlled above.
+            // No additional automatic worker retry.
+            Result.failure()
         }
     }
 }
