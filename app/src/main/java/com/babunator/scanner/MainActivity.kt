@@ -207,13 +207,7 @@ class MainActivity : AppCompatActivity() {
             lp()
         )
 
-        root.addView(
-            TextView(this).apply {
-                text = "Successful: 0\nFailed: 0\nRetry: 0\nLast update: —"
-                textSize = 16f
-            },
-            lp()
-        )
+
 
         root.addView(
             TextView(this).apply {
