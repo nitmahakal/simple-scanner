@@ -11,6 +11,10 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import java.util.Locale
+import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 
 class MainActivity : AppCompatActivity() {
 
@@ -182,7 +186,23 @@ class MainActivity : AppCompatActivity() {
             Button(this).apply {
                 text = "UPDATE DATA"
                 setOnClickListener {
-                    status.text = "Update requested. Data update connection will be wired next."
+                    val request = OneTimeWorkRequestBuilder<UpdateWorker>()
+                        .setInputData(
+                            Data.Builder()
+                                .putInt("offset", 0)
+                                .putInt("limit", 25)
+                                .build()
+                        )
+                        .build()
+            
+                    WorkManager.getInstance(this@MainActivity)
+                        .enqueueUniqueWork(
+                            "nse_data_update",
+                            ExistingWorkPolicy.KEEP,
+                            request
+                        )
+            
+                    status.text = "Update started..."
                 }
             },
             lp()
