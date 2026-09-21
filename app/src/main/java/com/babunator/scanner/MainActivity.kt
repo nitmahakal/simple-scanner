@@ -354,17 +354,32 @@ class MainActivity : AppCompatActivity() {
         root.addView(
             Button(this).apply {
                 text = "SCAN NOW"
-                setOnClickListener {
-                    val cfg = ScanConfig(
-                        tf.selectedItem.toString(),
-                        logic.selectedItem.toString(),
-                        rows.map { it.read() }
-                    )
-
-                    ScanConfigStore.save(this@MainActivity, cfg)
-
-                    status.text = "Scan requested"
-                }
+                        setOnClickListener {
+                            val cfg = ScanConfig(
+                                tf.selectedItem.toString(),
+                                logic.selectedItem.toString(),
+                                rows.map { it.read() }
+                            )
+                        
+                            ScanConfigStore.save(this@MainActivity, cfg)
+                        
+                            val request = OneTimeWorkRequestBuilder<ScanWorker>()
+                                .setInputData(
+                                    Data.Builder()
+                                        .putString("timeframe", cfg.timeframe)
+                                        .build()
+                                )
+                                .build()
+                        
+                            WorkManager.getInstance(this@MainActivity)
+                                .enqueueUniqueWork(
+                                    "nse_scan",
+                                    ExistingWorkPolicy.REPLACE,
+                                    request
+                                )
+                        
+                            status.text = "Scan running..."
+                        }
             },
             lp()
         )
