@@ -185,32 +185,37 @@ class MainActivity : AppCompatActivity() {
         }
         
         root.addView(status, lp())
+        val updateButton = Button(this).apply {
+            text = "UPDATE DATA"
+        
+            setOnClickListener {
+                val workManager = WorkManager.getInstance(this@MainActivity)
+        
+                val request = OneTimeWorkRequestBuilder<UpdateWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putInt("offset", 0)
+                            .putInt("limit", 25)
+                            .build()
+                    )
+                    .build()
+        
+                workManager.enqueueUniqueWork(
+                    "nse_data_update",
+                    ExistingWorkPolicy.KEEP,
+                    request
+                )
+        
+                text = "UPDATE IN PROGRESS"
+                isEnabled = false
+                status.text = "Update started..."
+            }
+        }
+        
         root.addView(
-            Button(this).apply {
-                text = "UPDATE DATA"
-                setOnClickListener {
-                    val request = OneTimeWorkRequestBuilder<UpdateWorker>()
-                        .setInputData(
-                            Data.Builder()
-                                .putInt("offset", 0)
-                                .putInt("limit", 25)
-                                .build()
-                        )
-                        .build()
-            
-                    WorkManager.getInstance(this@MainActivity)
-                        .enqueueUniqueWork(
-                            "nse_data_update",
-                            ExistingWorkPolicy.KEEP,
-                            request
-                        )
-            
-                    status.text = "Update started..."
-                }
-            },
+            updateButton,
             lp()
         )
-
         root.addView(
             label("Progress")
         )
