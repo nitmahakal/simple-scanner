@@ -78,6 +78,19 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                 )
             }
 
+            if (processed >= symbols.size) {
+                val finalStatus = db.getUpdateStatus()
+                db.saveUpdateStatus(
+                    total = symbols.size,
+                    processed = processed,
+                    successful = finalStatus?.successful ?: successful,
+                    failed = finalStatus?.failed ?: failed,
+                    retryCount = finalStatus?.retryCount ?: retryCount,
+                    lastUpdateTime = java.time.LocalDateTime.now().toString()
+                )
+            }
+
+
             Result.success(
                 Data.Builder()
                     .putInt("total", symbols.size)
