@@ -165,13 +165,19 @@ class MainActivity : AppCompatActivity() {
             title("Update Data")
         )
 
+        val db = AppDb(this)
+        val updateStatus = db.getUpdateStatus()
+        
         status = TextView(this).apply {
-            text = "Data status: Ready"
+            text = if (updateStatus == null) {
+                "Data status: Ready"
+            } else {
+                "Data status: ${updateStatus.processed} / ${updateStatus.total}"
+            }
             textSize = 16f
         }
-
+        
         root.addView(status, lp())
-
         root.addView(
             Button(this).apply {
                 text = "UPDATE DATA"
