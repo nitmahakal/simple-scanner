@@ -3,6 +3,9 @@ package com.babunator.scanner
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 
 class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
@@ -22,6 +25,7 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
             var retryCount = 0
 
             val previous = db.getUpdateStatus()
+
             if (offset == 0) {
                 db.saveUpdateStatus(
                     total = symbols.size,
@@ -80,6 +84,7 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
 
             if (processed >= symbols.size) {
                 val finalStatus = db.getUpdateStatus()
+
                 db.saveUpdateStatus(
                     total = symbols.size,
                     processed = processed,
@@ -88,8 +93,23 @@ class UpdateWorker(appContext: Context, params: WorkerParameters) : CoroutineWor
                     retryCount = finalStatus?.retryCount ?: retryCount,
                     lastUpdateTime = java.time.LocalDateTime.now().toString()
                 )
-            }
+            } else {
+                val nextRequest = OneTimeWorkRequestBuilder<UpdateWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putInt("offset", processed)
+                            .putInt("limit", limit)
+                            .build()
+                    )
+                    .build()
 
+                WorkManager.getInstance(applicationContext)
+                    .enqueueUniqueWork(
+                        "nse_data_update",
+                        ExistingWorkPolicy.APPEND,
+                        nextRequest
+                    )
+            }
 
             Result.success(
                 Data.Builder()
