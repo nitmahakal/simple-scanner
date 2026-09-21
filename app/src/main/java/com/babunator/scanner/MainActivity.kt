@@ -191,11 +191,26 @@ class MainActivity : AppCompatActivity() {
         root.addView(
             label("Progress")
         )
-
+        
         root.addView(
             TextView(this).apply {
                 text = if (updateStatus == null) {
-                    "Successful: 0\nFailed: 0\nRetry: 0\nLast update: —"
+                    "0 / 0"
+                } else {
+                    "${updateStatus.processed} / ${updateStatus.total}"
+                }
+                textSize = 18f
+            },
+            lp()
+        )
+        
+        root.addView(
+            TextView(this).apply {
+                text = if (updateStatus == null) {
+                    "Successful: 0\n" +
+                            "Failed: 0\n" +
+                            "Retry: 0\n" +
+                            "Last update: —"
                 } else {
                     "Successful: ${updateStatus.successful}\n" +
                             "Failed: ${updateStatus.failed}\n" +
