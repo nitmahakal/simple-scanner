@@ -399,7 +399,7 @@ class MainActivity : AppCompatActivity() {
         content.addView(root)
     }
 
-    private fun addConditionRow(root: LinearLayout, idx: Int) {
+    private fun addConditionRow(root: ViewGroup, idx: Int) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 10, 0, 10)
@@ -613,10 +613,41 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun verticalScroll(): LinearLayout {
-        return LinearLayout(this).apply {
+    private fun verticalScroll(): ViewGroup {
+        val scroll = android.widget.ScrollView(this)
+    
+        val inner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(18, 8, 18, 18)
+        }
+    
+        scroll.addView(
+            inner,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+    
+        return object : android.widget.FrameLayout(this) {
+            init {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                addView(scroll)
+            }
+    
+            override fun addView(
+                child: View?,
+                params: ViewGroup.LayoutParams?
+            ) {
+                if (child == null || child === scroll) {
+                    super.addView(child, params)
+                } else {
+                    inner.addView(child, params)
+                }
+            }
         }
     }
 
