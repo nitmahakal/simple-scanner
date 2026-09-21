@@ -202,11 +202,6 @@ class MainActivity : AppCompatActivity() {
             isEnabled = !updateRunning
         
             setOnClickListener {
-                ...
-            }
-        }
-        
-            setOnClickListener {
                 val workManager = WorkManager.getInstance(this@MainActivity)
         
                 val request = OneTimeWorkRequestBuilder<UpdateWorker>()
