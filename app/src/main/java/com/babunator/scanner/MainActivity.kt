@@ -452,50 +452,41 @@ class MainActivity : AppCompatActivity() {
     
         val leftParams = text("Left params")
     
-        val reverseRsiBox = LinearLayout(this).apply {
+        val leftReverseRsiBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
     
-        val reverseRsiLength = text(
-            "RSI Length",
-            true
-        )
+        val leftReverseRsiLength = text("RSI Length", true)
+        val leftReverseRsiSmoothing = text("Smoothing Length", true)
+        val leftReverseRsiTarget = text("RSI Target Level", true)
     
-        val reverseRsiSmoothing = text(
-            "Smoothing Length",
-            true
-        )
-    
-        val reverseRsiTarget = text(
-            "RSI Target Level",
-            true
-        )
-    
-        reverseRsiBox.addView(
-            reverseRsiLength,
-            lp()
-        )
-    
-        reverseRsiBox.addView(
-            reverseRsiSmoothing,
-            lp()
-        )
-    
-        reverseRsiBox.addView(
-            reverseRsiTarget,
-            lp()
-        )
+        leftReverseRsiBox.addView(leftReverseRsiLength, lp())
+        leftReverseRsiBox.addView(leftReverseRsiSmoothing, lp())
+        leftReverseRsiBox.addView(leftReverseRsiTarget, lp())
     
         val rightParams = text("Right params")
+    
+        val rightReverseRsiBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+    
+        val rightReverseRsiLength = text("RSI Length", true)
+        val rightReverseRsiSmoothing = text("Smoothing Length", true)
+        val rightReverseRsiTarget = text("RSI Target Level", true)
+    
+        rightReverseRsiBox.addView(rightReverseRsiLength, lp())
+        rightReverseRsiBox.addView(rightReverseRsiSmoothing, lp())
+        rightReverseRsiBox.addView(rightReverseRsiTarget, lp())
+    
         val target = text("Number target", true)
         val range = text("Range % (Near / May Cross)", true)
     
         box.addView(label("Value A / left indicator"))
         box.addView(left, lp())
-    
         box.addView(leftParams, lp())
-        box.addView(reverseRsiBox, lp())
+        box.addView(leftReverseRsiBox, lp())
     
         left.setOnItemSelectedListener(
             object : AdapterView.OnItemSelectedListener {
@@ -506,14 +497,12 @@ class MainActivity : AppCompatActivity() {
                     position: Int,
                     id: Long
                 ) {
-                    val selected = left.selectedItem.toString()
-    
-                    if (selected == "Reverse RSI") {
+                    if (left.selectedItem.toString() == "Reverse RSI") {
                         leftParams.visibility = View.GONE
-                        reverseRsiBox.visibility = View.VISIBLE
+                        leftReverseRsiBox.visibility = View.VISIBLE
                     } else {
                         leftParams.visibility = View.VISIBLE
-                        reverseRsiBox.visibility = View.GONE
+                        leftReverseRsiBox.visibility = View.GONE
                     }
                 }
     
@@ -521,7 +510,7 @@ class MainActivity : AppCompatActivity() {
                     parent: AdapterView<*>?
                 ) {
                     leftParams.visibility = View.VISIBLE
-                    reverseRsiBox.visibility = View.GONE
+                    leftReverseRsiBox.visibility = View.GONE
                 }
             }
         )
@@ -531,10 +520,48 @@ class MainActivity : AppCompatActivity() {
     
         box.addView(label("Value B / right indicator"))
         box.addView(right, lp())
-    
         box.addView(rightParams, lp())
+        box.addView(rightReverseRsiBox, lp())
         box.addView(target, lp())
         box.addView(range, lp())
+    
+        right.setOnItemSelectedListener(
+            object : AdapterView.OnItemSelectedListener {
+    
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    val selected = right.selectedItem.toString()
+    
+                    if (selected == "Reverse RSI") {
+                        rightParams.visibility = View.GONE
+                        rightReverseRsiBox.visibility = View.VISIBLE
+                        target.visibility = View.GONE
+                    } else {
+                        rightParams.visibility = View.VISIBLE
+                        rightReverseRsiBox.visibility = View.GONE
+    
+                        target.visibility =
+                            if (selected == "Number") {
+                                View.VISIBLE
+                            } else {
+                                View.VISIBLE
+                            }
+                    }
+                }
+    
+                override fun onNothingSelected(
+                    parent: AdapterView<*>?
+                ) {
+                    rightParams.visibility = View.VISIBLE
+                    rightReverseRsiBox.visibility = View.GONE
+                    target.visibility = View.VISIBLE
+                }
+            }
+        )
     
         root.addView(box, lp())
     
@@ -546,9 +573,12 @@ class MainActivity : AppCompatActivity() {
             rightParams,
             target,
             range,
-            reverseRsiLength,
-            reverseRsiSmoothing,
-            reverseRsiTarget
+            leftReverseRsiLength,
+            leftReverseRsiSmoothing,
+            leftReverseRsiTarget,
+            rightReverseRsiLength,
+            rightReverseRsiSmoothing,
+            rightReverseRsiTarget
         )
     }
 
@@ -889,7 +919,6 @@ class MainActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
     }
-
     private data class Row(
         val left: Spinner,
         val op: Spinner,
@@ -898,22 +927,25 @@ class MainActivity : AppCompatActivity() {
         val rp: EditText,
         val target: EditText,
         val range: EditText,
-        val reverseRsiLength: EditText,
-        val reverseRsiSmoothing: EditText,
-        val reverseRsiTarget: EditText
+        val leftReverseRsiLength: EditText,
+        val leftReverseRsiSmoothing: EditText,
+        val leftReverseRsiTarget: EditText,
+        val rightReverseRsiLength: EditText,
+        val rightReverseRsiSmoothing: EditText,
+        val rightReverseRsiTarget: EditText
     ) {
         fun read(): Condition {
     
             val l =
                 if (left.selectedItem.toString() == "Reverse RSI") {
                     listOf(
-                        reverseRsiLength.text.toString()
+                        leftReverseRsiLength.text.toString()
                             .toDoubleOrNull() ?: 0.0,
     
-                        reverseRsiSmoothing.text.toString()
+                        leftReverseRsiSmoothing.text.toString()
                             .toDoubleOrNull() ?: 0.0,
     
-                        reverseRsiTarget.text.toString()
+                        leftReverseRsiTarget.text.toString()
                             .toDoubleOrNull() ?: 0.0
                     )
                 } else {
@@ -924,10 +956,24 @@ class MainActivity : AppCompatActivity() {
                         }
                 }
     
-            val r = rp.text.toString()
-                .split(',')
-                .mapNotNull {
-                    it.trim().toDoubleOrNull()
+            val r =
+                if (right.selectedItem.toString() == "Reverse RSI") {
+                    listOf(
+                        rightReverseRsiLength.text.toString()
+                            .toDoubleOrNull() ?: 0.0,
+    
+                        rightReverseRsiSmoothing.text.toString()
+                            .toDoubleOrNull() ?: 0.0,
+    
+                        rightReverseRsiTarget.text.toString()
+                            .toDoubleOrNull() ?: 0.0
+                    )
+                } else {
+                    rp.text.toString()
+                        .split(',')
+                        .mapNotNull {
+                            it.trim().toDoubleOrNull()
+                        }
                 }
     
             return Condition(
@@ -941,4 +987,4 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
-}
+  }
