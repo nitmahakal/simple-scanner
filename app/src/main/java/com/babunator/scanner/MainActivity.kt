@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
         "Numeric Value",
         "Reverse RSI",
         "Reverse Stoch RSI",
-        "Reverse Stoch RSI %K",
+        "Reverse Stoch  %K",
         "Reverse Stoch RSI %D"
     )
 
@@ -675,7 +675,7 @@ class MainActivity : AppCompatActivity() {
                 "MACD Histogram" -> 3
                 "Stoch RSI %K" -> 3
                 "Stoch RSI %D" -> 4
-                "Reverse RSI" -> 2
+                "Reverse RSI" -> 3
                 "Reverse Stoch RSI" -> 3
                 "Reverse Stoch RSI %K" -> 4
                 "Reverse Stoch RSI %D" -> 5
