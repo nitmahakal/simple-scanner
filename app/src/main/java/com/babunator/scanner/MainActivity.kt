@@ -897,22 +897,39 @@ class MainActivity : AppCompatActivity() {
         val lp: EditText,
         val rp: EditText,
         val target: EditText,
-        val range: EditText
+        val range: EditText,
+        val reverseRsiLength: EditText,
+        val reverseRsiSmoothing: EditText,
+        val reverseRsiTarget: EditText
     ) {
         fun read(): Condition {
-
-            val l = lp.text.toString()
-                .split(',')
-                .mapNotNull {
-                    it.trim().toDoubleOrNull()
+    
+            val l =
+                if (left.selectedItem.toString() == "Reverse RSI") {
+                    listOf(
+                        reverseRsiLength.text.toString()
+                            .toDoubleOrNull() ?: 0.0,
+    
+                        reverseRsiSmoothing.text.toString()
+                            .toDoubleOrNull() ?: 0.0,
+    
+                        reverseRsiTarget.text.toString()
+                            .toDoubleOrNull() ?: 0.0
+                    )
+                } else {
+                    lp.text.toString()
+                        .split(',')
+                        .mapNotNull {
+                            it.trim().toDoubleOrNull()
+                        }
                 }
-
+    
             val r = rp.text.toString()
                 .split(',')
                 .mapNotNull {
                     it.trim().toDoubleOrNull()
                 }
-
+    
             return Condition(
                 left.selectedItem.toString(),
                 l,
