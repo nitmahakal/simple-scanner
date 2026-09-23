@@ -17,6 +17,10 @@ object ScanConfigStore {
 
         val e = sp.edit()
             .putString("timeframe", cfg.timeframe)
+            .putString(
+                "timeframes",
+                cfg.timeframes.joinToString(",")
+            )
             .putString("logic", cfg.logic)
 
         for (i in 0 until 3) {
@@ -68,6 +72,23 @@ object ScanConfigStore {
             P,
             Context.MODE_PRIVATE
         )
+
+        val oldTimeframe =
+            sp.getString(
+                "timeframe",
+                "Daily"
+            ) ?: "Daily"
+
+        val savedTimeframes =
+            sp.getString(
+                "timeframes",
+                null
+            )
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.distinct()
+                ?: listOf(oldTimeframe)
 
         val cs = (0 until 3).mapNotNull { i ->
 
@@ -129,18 +150,12 @@ object ScanConfigStore {
         }
 
         return ScanConfig(
-            timeframe =
-                sp.getString(
-                    "timeframe",
-                    "Daily"
-                ) ?: "Daily",
-
+            timeframe = oldTimeframe,
             logic =
                 sp.getString(
                     "logic",
                     "AND"
                 ) ?: "AND",
-
             conditions =
                 if (cs.isEmpty()) {
                     listOf(
@@ -156,7 +171,8 @@ object ScanConfigStore {
                     )
                 } else {
                     cs
-                }
+                },
+            timeframes = savedTimeframes
         )
     }
 }
