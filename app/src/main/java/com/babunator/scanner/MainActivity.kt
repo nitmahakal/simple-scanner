@@ -333,13 +333,56 @@ class MainActivity : AppCompatActivity() {
 
         root.addView(status, lp())
 
-        val tf = Spinner(this).apply {
-            adapter = spinner(listOf("Daily", "Weekly", "Monthly"))
+        val timeframeOptions = listOf(
+            "Daily",
+            "Weekly",
+            "Monthly"
+        )
+        
+        val selectedTimeframes = mutableListOf("Daily")
+        
+        val timeframeButton = Button(this).apply {
+            text = "Daily"
+        
+            setOnClickListener {
+        
+                val checked = timeframeOptions.map {
+                    selectedTimeframes.contains(it)
+                }.toBooleanArray()
+        
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Select Timeframes")
+                    .setMultiChoiceItems(
+                        timeframeOptions.toTypedArray(),
+                        checked
+                    ) { _, which, isChecked ->
+        
+                        val value = timeframeOptions[which]
+        
+                        if (isChecked) {
+                            if (!selectedTimeframes.contains(value)) {
+                                selectedTimeframes.add(value)
+                            }
+                        } else {
+                            selectedTimeframes.remove(value)
+                        }
+                    }
+                    .setPositiveButton("DONE") { _, _ ->
+        
+                        if (selectedTimeframes.isEmpty()) {
+                            selectedTimeframes.add("Daily")
+                        }
+        
+                        timeframeButton.text =
+                            selectedTimeframes.joinToString(", ")
+                    }
+                    .setNegativeButton("CANCEL", null)
+                    .show()
+            }
         }
-
-        root.addView(label("Timeframe"))
-        root.addView(tf, lp())
-
+        
+        root.addView(label("Timeframes"))
+        root.addView(timeframeButton, lp())
         val logic = Spinner(this).apply {
             adapter = spinner(listOf("AND", "OR"))
         }
@@ -370,9 +413,10 @@ class MainActivity : AppCompatActivity() {
                             }
                         
                             val cfg = ScanConfig(
-                                tf.selectedItem.toString(),
-                                logic.selectedItem.toString(),
-                                conditions
+                                timeframe = selectedTimeframes.first(),
+                                logic = logic.selectedItem.toString(),
+                                conditions = conditions,
+                                timeframes = selectedTimeframes.toList()
                             )
                         
                             ScanConfigStore.save(this@MainActivity, cfg)
