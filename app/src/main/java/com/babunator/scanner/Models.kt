@@ -10,5 +10,10 @@ data class Condition(
     val rightTarget: Double = 0.0,
     val rangePct: Double = 1.0
 )
-data class ScanConfig(val timeframe: String, val logic: String, val conditions: List<Condition>)
+data class ScanConfig(
+    val timeframe: String,
+    val logic: String,
+    val conditions: List<Condition>,
+    val timeframes: List<String> = listOf(timeframe)
+)
 data class Match(val symbol: String, val timeframe: String, val close: Double, val note: String)
