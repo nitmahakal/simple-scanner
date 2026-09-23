@@ -433,45 +433,111 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 10, 0, 10)
         }
-
+    
         box.addView(label("Condition ${idx + 1}"))
-
+    
         val left = Spinner(this).apply {
             adapter = spinner(indicators)
         }
-
+    
         val op = Spinner(this).apply {
             adapter = spinner(comparators)
         }
-
+    
         val right = Spinner(this).apply {
             adapter = spinner(
                 listOf("Number") + indicators.filter { it != "Numeric Value" }
             )
         }
-
+    
         val leftParams = text("Left params")
+    
+        val reverseRsiBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+    
+        val reverseRsiLength = text(
+            "RSI Length",
+            true
+        )
+    
+        val reverseRsiSmoothing = text(
+            "Smoothing Length",
+            true
+        )
+    
+        val reverseRsiTarget = text(
+            "RSI Target Level",
+            true
+        )
+    
+        reverseRsiBox.addView(
+            reverseRsiLength,
+            lp()
+        )
+    
+        reverseRsiBox.addView(
+            reverseRsiSmoothing,
+            lp()
+        )
+    
+        reverseRsiBox.addView(
+            reverseRsiTarget,
+            lp()
+        )
+    
         val rightParams = text("Right params")
         val target = text("Number target", true)
         val range = text("Range % (Near / May Cross)", true)
-
+    
         box.addView(label("Value A / left indicator"))
         box.addView(left, lp())
-
+    
         box.addView(leftParams, lp())
-
+        box.addView(reverseRsiBox, lp())
+    
+        left.setOnItemSelectedListener(
+            object : AdapterView.OnItemSelectedListener {
+    
+                override fun onItemSelected(
+                    parent: AdapterView<*>?,
+                    view: View?,
+                    position: Int,
+                    id: Long
+                ) {
+                    val selected = left.selectedItem.toString()
+    
+                    if (selected == "Reverse RSI") {
+                        leftParams.visibility = View.GONE
+                        reverseRsiBox.visibility = View.VISIBLE
+                    } else {
+                        leftParams.visibility = View.VISIBLE
+                        reverseRsiBox.visibility = View.GONE
+                    }
+                }
+    
+                override fun onNothingSelected(
+                    parent: AdapterView<*>?
+                ) {
+                    leftParams.visibility = View.VISIBLE
+                    reverseRsiBox.visibility = View.GONE
+                }
+            }
+        )
+    
         box.addView(label("Comparator"))
         box.addView(op, lp())
-
+    
         box.addView(label("Value B / right indicator"))
         box.addView(right, lp())
-
+    
         box.addView(rightParams, lp())
         box.addView(target, lp())
         box.addView(range, lp())
-
+    
         root.addView(box, lp())
-
+    
         rows += Row(
             left,
             op,
@@ -479,7 +545,10 @@ class MainActivity : AppCompatActivity() {
             leftParams,
             rightParams,
             target,
-            range
+            range,
+            reverseRsiLength,
+            reverseRsiSmoothing,
+            reverseRsiTarget
         )
     }
 
