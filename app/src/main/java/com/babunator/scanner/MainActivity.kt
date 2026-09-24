@@ -199,7 +199,7 @@ private fun showUpdateScreen() {
     val marketCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(18, 18, 18, 18)
-        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+        background = cardBackground()
     }
 
     marketCard.addView(
@@ -303,7 +303,7 @@ private fun showUpdateScreen() {
     val autoCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(18, 18, 18, 18)
-        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+        background = cardBackground()
     }
 
     autoCard.addView(
@@ -335,7 +335,7 @@ private fun showUpdateScreen() {
     val resumeCard = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(18, 18, 18, 18)
-        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+        background = cardBackground()
     }
 
     resumeCard.addView(
@@ -1032,8 +1032,25 @@ private fun showUpdateScreen() {
                 }
             }
         }
-    }
-
+        }
+        
+        private fun cardBackground(): android.graphics.drawable.GradientDrawable {
+            val typedValue = android.util.TypedValue()
+        
+            theme.resolveAttribute(
+                android.R.attr.colorBackground,
+                typedValue,
+                true
+            )
+        
+            return android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 20f
+                setColor(
+                    typedValue.data
+                )
+            }
+        }
+    
     private fun title(text: String): TextView {
         return TextView(this).apply {
             this.text = text
