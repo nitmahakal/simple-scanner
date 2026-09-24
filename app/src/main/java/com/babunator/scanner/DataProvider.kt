@@ -12,20 +12,25 @@ class DataProvider {
 
     private fun get(url: String): String {
         val c = URL(url).openConnection() as HttpURLConnection
-        c.connectTimeout = 15000
-        c.readTimeout = 20000
-        c.requestMethod = "GET"
-        c.setRequestProperty(
-            "User-Agent",
-            "Mozilla/5.0 NSE-Simple-Scanner/1.0"
-        )
-
-        if (c.responseCode !in 200..299) {
-            throw IllegalStateException("HTTP ${c.responseCode}")
-        }
-
-        return BufferedReader(c.inputStream.reader()).use {
-            it.readText()
+        
+        try {
+            c.connectTimeout = 15000
+            c.readTimeout = 20000
+            c.requestMethod = "GET"
+            c.setRequestProperty(
+                "User-Agent",
+                "Mozilla/5.0 NSE-Simple-Scanner/1.0"
+            )
+        
+            if (c.responseCode !in 200..299) {
+                throw IllegalStateException("HTTP ${c.responseCode}")
+            }
+        
+            return BufferedReader(c.inputStream.reader()).use {
+                it.readText()
+            }
+        } finally {
+            c.disconnect()
         }
     }
 
