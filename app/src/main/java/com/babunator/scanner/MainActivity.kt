@@ -21,25 +21,30 @@ import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
-    private val indicators = listOf(
-        "Close",
-        "EMA",
-        "HMA",
-        "RSI",
-        "EMA of RSI",
-        "MACD",
-        "MACD Signal",
-        "MACD Histogram",
-        "Stoch RSI %K",
-        "Stoch RSI %D",
-        "Numeric Value",
-        "Reverse RSI",
-        "Reverse Stoch RSI",
-        "Reverse Stoch  %K",
-        "Reverse Stoch RSI %D"
-    )
-
-    private val comparators = listOf(
+        private val indicators = listOf(
+            "Close",
+            "EMA",
+            "HMA",
+            "RSI",
+            "EMA of RSI",
+            "MACD",
+            "MACD Signal",
+            "MACD Histogram",
+            "Stoch RSI",
+            "Stoch RSI %K",
+            "Stoch RSI %D",
+            "Numeric Value",
+            "Reverse RSI Level 40",
+            "Reverse RSI Level 50",
+            "Reverse RSI Level 60",
+            "Reverse Stoch RSI Level 20",
+            "Reverse Stoch RSI Level 50",
+            "Reverse Stoch RSI Level 80",
+            "Reverse Stoch RSI %K",
+            "Reverse Stoch RSI %D"
+        )
+        
+        private val comparators = listOf(
         "Above",
         "Below",
         "Equal",
