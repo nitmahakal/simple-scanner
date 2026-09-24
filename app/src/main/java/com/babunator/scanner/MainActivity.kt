@@ -463,13 +463,17 @@ class MainActivity : AppCompatActivity() {
 
         root.addView(
             TextView(this).apply {
-                text = "\nParams examples:\n" +
-                        "EMA: 50\n" +
-                        "RSI: 14\n" +
-                        "Reverse Stoch RSI: 14,14,50\n" +
-                        "Reverse Stoch RSI %K: 14,14,3,50\n" +
-                        "Reverse Stoch RSI %D: 14,14,3,3,50\n" +
-                        "Near/May Cross range: enter the % separately."
+                    text = "\nParams examples:\n" +
+                           "EMA: 50\n" +
+                           "RSI: 14\n" +
+                           "EMA of RSI: 14,9\n" +
+                           "MACD: 12,26,9\n" +
+                           "Stoch RSI: 14,14\n" +
+                           "Reverse RSI Level 60: 14,9\n" +
+                           "Reverse Stoch RSI Level 50: 14,14\n" +
+                           "Reverse Stoch RSI %K: 14,14,3,50\n" +
+                           "Reverse Stoch RSI %D: 14,14,3,3,50\n" +
+                           "Near/May Cross range: enter the % separately."
             },
             lp()
         )
@@ -478,159 +482,132 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addConditionRow(root: ViewGroup, idx: Int) {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 10, 0, 10)
-        }
-    
-        box.addView(label("Condition ${idx + 1}"))
-    
-        val left = Spinner(this).apply {
-            adapter = spinner(indicators)
-        }
-    
-        val op = Spinner(this).apply {
-            adapter = spinner(comparators)
-        }
-    
-        val right = Spinner(this).apply {
-            adapter = spinner(
-                listOf("Number") + indicators.filter { it != "Numeric Value" }
+            val box = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, 10, 0, 10)
+            }
+        
+            box.addView(label("Condition ${idx + 1}"))
+        
+            val left = Spinner(this).apply {
+                adapter = spinner(indicators)
+            }
+        
+            val op = Spinner(this).apply {
+                adapter = spinner(comparators)
+            }
+        
+            val right = Spinner(this).apply {
+                adapter = spinner(
+                    listOf("Number") + indicators.filter {
+                        it != "Numeric Value"
+                    }
+                )
+            }
+        
+            val leftParams = text("Left params")
+        
+            val rightParams = text("Right params")
+        
+            val target = text("Number target", true)
+        
+            val range = text(
+                "Range % (Near / May Cross)",
+                true
             )
-        }
-    
-        val leftParams = text("Left params")
-    
-        val leftReverseRsiBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-    
-        val leftReverseRsiLength = text("RSI Length", true)
-        val leftReverseRsiSmoothing = text("Smoothing Length", true)
-        val leftReverseRsiTarget = text("RSI Target Level", true)
-    
-        leftReverseRsiBox.addView(leftReverseRsiLength, lp())
-        leftReverseRsiBox.addView(leftReverseRsiSmoothing, lp())
-        leftReverseRsiBox.addView(leftReverseRsiTarget, lp())
-    
-        val rightParams = text("Right params")
-    
-        val rightReverseRsiBox = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-    
-        val rightReverseRsiLength = text("RSI Length", true)
-        val rightReverseRsiSmoothing = text("Smoothing Length", true)
-        val rightReverseRsiTarget = text("RSI Target Level", true)
-    
-        rightReverseRsiBox.addView(rightReverseRsiLength, lp())
-        rightReverseRsiBox.addView(rightReverseRsiSmoothing, lp())
-        rightReverseRsiBox.addView(rightReverseRsiTarget, lp())
-    
-        val target = text("Number target", true)
-        val range = text("Range % (Near / May Cross)", true)
-    
-        box.addView(label("Value A / left indicator"))
-        box.addView(left, lp())
-        box.addView(leftParams, lp())
-        box.addView(leftReverseRsiBox, lp())
-    
-        left.setOnItemSelectedListener(
-            object : AdapterView.OnItemSelectedListener {
-    
-                override fun onItemSelected(
-                    parent: AdapterView<*>?,
-                    view: View?,
-                    position: Int,
-                    id: Long
-                ) {
-                    if (left.selectedItem.toString() == "Reverse RSI") {
-                        leftParams.visibility = View.GONE
-                        leftReverseRsiBox.visibility = View.VISIBLE
-                    } else {
-                        leftParams.visibility = View.VISIBLE
-                        leftReverseRsiBox.visibility = View.GONE
+        
+            box.addView(
+                label("Value A / left indicator")
+            )
+            box.addView(left, lp())
+            box.addView(leftParams, lp())
+        
+            box.addView(
+                label("Comparator")
+            )
+            box.addView(op, lp())
+        
+            box.addView(
+                label("Value B / right indicator")
+            )
+            box.addView(right, lp())
+            box.addView(rightParams, lp())
+            box.addView(target, lp())
+            box.addView(range, lp())
+        
+            left.setOnItemSelectedListener(
+                object : AdapterView.OnItemSelectedListener {
+        
+                    override fun onItemSelected(
+                        parent: AdapterView<*>?,
+                        view: View?,
+                        position: Int,
+                        id: Long
+                    ) {
+                        leftParams.visibility =
+                            View.VISIBLE
+                    }
+        
+                    override fun onNothingSelected(
+                        parent: AdapterView<*>?
+                    ) {
+                        leftParams.visibility =
+                            View.VISIBLE
                     }
                 }
-    
-                override fun onNothingSelected(
-                    parent: AdapterView<*>?
-                ) {
-                    leftParams.visibility = View.VISIBLE
-                    leftReverseRsiBox.visibility = View.GONE
-                }
-            }
-        )
-    
-        box.addView(label("Comparator"))
-        box.addView(op, lp())
-    
-        box.addView(label("Value B / right indicator"))
-        box.addView(right, lp())
-        box.addView(rightParams, lp())
-        box.addView(rightReverseRsiBox, lp())
-        box.addView(target, lp())
-        box.addView(range, lp())
-    
-        right.setOnItemSelectedListener(
-            object : AdapterView.OnItemSelectedListener {
-    
-                override fun onItemSelected(
-                    parent: AdapterView<*>?,
-                    view: View?,
-                    position: Int,
-                    id: Long
-                ) {
-                    val selected = right.selectedItem.toString()
-    
-                    if (selected == "Reverse RSI") {
-                        rightParams.visibility = View.GONE
-                        rightReverseRsiBox.visibility = View.VISIBLE
-                        target.visibility = View.GONE
-                    } else {
-                        rightParams.visibility = View.VISIBLE
-                        rightReverseRsiBox.visibility = View.GONE
-    
+            )
+        
+            right.setOnItemSelectedListener(
+                object : AdapterView.OnItemSelectedListener {
+        
+                    override fun onItemSelected(
+                        parent: AdapterView<*>?,
+                        view: View?,
+                        position: Int,
+                        id: Long
+                    ) {
+                        val selected =
+                            right.selectedItem.toString()
+        
                         target.visibility =
                             if (selected == "Number") {
                                 View.VISIBLE
                             } else {
+                                View.GONE
+                            }
+        
+                        rightParams.visibility =
+                            if (selected == "Number") {
+                                View.GONE
+                            } else {
                                 View.VISIBLE
                             }
                     }
+        
+                    override fun onNothingSelected(
+                        parent: AdapterView<*>?
+                    ) {
+                        target.visibility =
+                            View.VISIBLE
+        
+                        rightParams.visibility =
+                            View.GONE
+                    }
                 }
-    
-                override fun onNothingSelected(
-                    parent: AdapterView<*>?
-                ) {
-                    rightParams.visibility = View.VISIBLE
-                    rightReverseRsiBox.visibility = View.GONE
-                    target.visibility = View.VISIBLE
-                }
-            }
-        )
-    
-        root.addView(box, lp())
-    
-        rows += Row(
-            left,
-            op,
-            right,
-            leftParams,
-            rightParams,
-            target,
-            range,
-            leftReverseRsiLength,
-            leftReverseRsiSmoothing,
-            leftReverseRsiTarget,
-            rightReverseRsiLength,
-            rightReverseRsiSmoothing,
-            rightReverseRsiTarget
-        )
-    }
-
+            )
+        
+            root.addView(box, lp())
+        
+            rows += Row(
+                left,
+                op,
+                right,
+                leftParams,
+                rightParams,
+                target,
+                range
+            )
+        }
     // ---------------------------------------------------------
     // SCREEN 3 : SAVED SCANS / TRACKING
     // ---------------------------------------------------------
@@ -979,73 +956,41 @@ class MainActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
-    }
-    private data class Row(
-        val left: Spinner,
-        val op: Spinner,
-        val right: Spinner,
-        val lp: EditText,
-        val rp: EditText,
-        val target: EditText,
-        val range: EditText,
-        val leftReverseRsiLength: EditText,
-        val leftReverseRsiSmoothing: EditText,
-        val leftReverseRsiTarget: EditText,
-        val rightReverseRsiLength: EditText,
-        val rightReverseRsiSmoothing: EditText,
-        val rightReverseRsiTarget: EditText
-    ) {
-        fun read(): Condition {
-    
-            val l =
-                if (left.selectedItem.toString() == "Reverse RSI") {
-                    listOf(
-                        leftReverseRsiLength.text.toString()
-                            .toDoubleOrNull() ?: 0.0,
-    
-                        leftReverseRsiSmoothing.text.toString()
-                            .toDoubleOrNull() ?: 0.0,
-    
-                        leftReverseRsiTarget.text.toString()
-                            .toDoubleOrNull() ?: 0.0
-                    )
-                } else {
+        }
+        private data class Row(
+            val left: Spinner,
+            val op: Spinner,
+            val right: Spinner,
+            val lp: EditText,
+            val rp: EditText,
+            val target: EditText,
+            val range: EditText
+        ) {
+            fun read(): Condition {
+        
+                val l =
                     lp.text.toString()
                         .split(',')
                         .mapNotNull {
                             it.trim().toDoubleOrNull()
                         }
-                }
-    
-            val r =
-                if (right.selectedItem.toString() == "Reverse RSI") {
-                    listOf(
-                        rightReverseRsiLength.text.toString()
-                            .toDoubleOrNull() ?: 0.0,
-    
-                        rightReverseRsiSmoothing.text.toString()
-                            .toDoubleOrNull() ?: 0.0,
-    
-                        rightReverseRsiTarget.text.toString()
-                            .toDoubleOrNull() ?: 0.0
-                    )
-                } else {
+        
+                val r =
                     rp.text.toString()
                         .split(',')
                         .mapNotNull {
                             it.trim().toDoubleOrNull()
                         }
-                }
-    
-            return Condition(
-                left.selectedItem.toString(),
-                l,
-                op.selectedItem.toString(),
-                right.selectedItem.toString(),
-                r,
-                target.text.toString().toDoubleOrNull() ?: 0.0,
-                range.text.toString().toDoubleOrNull() ?: 1.0
-            )
+        
+                return Condition(
+                    left.selectedItem.toString(),
+                    l,
+                    op.selectedItem.toString(),
+                    right.selectedItem.toString(),
+                    r,
+                    target.text.toString().toDoubleOrNull() ?: 0.0,
+                    range.text.toString().toDoubleOrNull() ?: 1.0
+                )
+            }
         }
-    }
   }
