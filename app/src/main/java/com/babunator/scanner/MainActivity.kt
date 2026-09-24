@@ -338,13 +338,92 @@ private fun showUpdateScreen() {
                 lp()
         )
 
-        autoCard.addView(
+                autoCard.addView(
                 Button(this).apply {
-                    text = "AUTO UPDATE: OFF"
+                    val schedulePrefs =
+                        getSharedPreferences(
+                            "schedule",
+                            MODE_PRIVATE
+                        )
+
+                    val hasSchedule =
+                        schedulePrefs.contains("h") &&
+                        schedulePrefs.contains("m")
+
+                    val savedHour =
+                        schedulePrefs.getInt("h", 16)
+
+                    val savedMinute =
+                        schedulePrefs.getInt("m", 30)
+
+                    text =
+                        if (hasSchedule) {
+                            val amPm =
+                                if (savedHour >= 12) "PM" else "AM"
+
+                            val displayHour =
+                                when {
+                                    savedHour == 0 -> 12
+                                    savedHour > 12 -> savedHour - 12
+                                    else -> savedHour
+                                }
+
+                            String.format(
+                                Locale.ENGLISH,
+                                "AUTO UPDATE: ON • %02d:%02d %s",
+                                displayHour,
+                                savedMinute,
+                                amPm
+                            )
+                        } else {
+                            "AUTO UPDATE: OFF • SET TIME"
+                        }
+
                     textSize = 14f
                     minHeight = 52
                     minimumHeight = 52
-                    isEnabled = false
+
+                    setOnClickListener {
+                        TimePickerDialog(
+                            this@MainActivity,
+                            { _, hourOfDay, minute ->
+
+                                Scheduler.schedule(
+                                    this@MainActivity,
+                                    hourOfDay,
+                                    minute
+                                )
+
+                                val amPm =
+                                    if (hourOfDay >= 12) "PM" else "AM"
+
+                                val displayHour =
+                                    when {
+                                        hourOfDay == 0 -> 12
+                                        hourOfDay > 12 -> hourOfDay - 12
+                                        else -> hourOfDay
+                                    }
+
+                                text =
+                                    String.format(
+                                        Locale.ENGLISH,
+                                        "AUTO UPDATE: ON • %02d:%02d %s",
+                                        displayHour,
+                                        minute,
+                                        amPm
+                                    )
+
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Daily auto update scheduled.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            savedHour,
+                            savedMinute,
+                            false
+                        ).show()
+                    }
                 },
                 lp()
         )
