@@ -22,8 +22,9 @@ object ScanConfigStore {
                 cfg.timeframes.joinToString(",")
             )
             .putString("logic", cfg.logic)
+            .putInt("condition_count", cfg.conditions.size)
 
-        for (i in 0 until 3) {
+        for (i in cfg.conditions.indices) {
 
             val c = cfg.conditions.getOrNull(i)
 
@@ -90,7 +91,17 @@ object ScanConfigStore {
                 ?.distinct()
                 ?: listOf(oldTimeframe)
 
-        val cs = (0 until 3).mapNotNull { i ->
+        val conditionCount =
+            if (sp.contains("condition_count")) {
+                sp.getInt("condition_count", 1)
+            } else {
+                when {
+                    sp.contains("li2") -> 3
+                    sp.contains("li1") -> 2
+                    else -> 1
+                }
+            }        
+        val cs = (0 until conditionCount).mapNotNull { i ->
 
             val li =
                 sp.getString("li$i", null)
