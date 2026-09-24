@@ -191,7 +191,7 @@ private fun showUpdateScreen() {
 
     var progressText: TextView
     var statsText: TextView
-
+    var lastUpdatedText: TextView
     // ---------------------------------------------------------
     // MARKET DATA CARD
     // ---------------------------------------------------------
@@ -293,6 +293,18 @@ private fun showUpdateScreen() {
     }
 
     marketCard.addView(statsText, lp())
+            lastUpdatedText = TextView(this).apply {
+            text = if (updateStatus?.lastUpdateTime != null) {
+                "Last updated: ${updateStatus.lastUpdateTime}"
+            } else {
+                "Last updated: —"
+            }
+            textSize = 15f
+            setPadding(0, 8, 0, 0)
+            visibility = View.VISIBLE
+    }
+
+    marketCard.addView(lastUpdatedText, lp())
 
     root.addView(
         marketCard,
@@ -416,17 +428,34 @@ private fun showUpdateScreen() {
 
             if (current != null) {
 
-                progressText.text =
-                    "${current.processed} / ${current.total}"
-
-                statsText.text =
-                    "Successful: ${current.successful}\n" +
-                    "Failed: ${current.failed}\n" +
-                    "Retry: ${current.retryCount}\n" +
-                    "Last update: ${current.lastUpdateTime ?: "—"}"
-
-                status.text =
-                    "Data status: ${current.processed} / ${current.total}"
+                    val completed =
+                        current.total > 0 &&
+                        current.processed >= current.total &&
+                        current.failed == 0
+                
+                    progressText.text =
+                        "${current.processed} / ${current.total}"
+                
+                    statsText.text =
+                        "Successful: ${current.successful}\n" +
+                        "Failed: ${current.failed}\n" +
+                        "Retry: ${current.retryCount}"
+                
+                    lastUpdatedText.text =
+                        "Last updated: ${current.lastUpdateTime ?: "—"}"
+                
+                    progressText.visibility =
+                        if (completed) View.GONE else View.VISIBLE
+                
+                    statsText.visibility =
+                        if (completed) View.GONE else View.VISIBLE
+                
+                    status.text =
+                        if (completed) {
+                            "Data status: Up to date"
+                        } else {
+                            "Data status: ${current.processed} / ${current.total}"
+                        }
             }
 
             delay(1000)
