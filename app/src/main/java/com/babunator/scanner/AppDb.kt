@@ -1,4 +1,4 @@
-```kotlin
+
 package com.babunator.scanner
 
 import android.content.ContentValues
@@ -218,4 +218,3 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
         return null
     }
 }
-```
