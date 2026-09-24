@@ -341,44 +341,44 @@ class MainActivity : AppCompatActivity() {
         
         val selectedTimeframes = mutableListOf("Daily")
         
-        val timeframeButton = Button(this).apply {
-            text = "Daily"
+        val timeframeButton = Button(this)
+
+        timeframeButton.text = "Daily"
         
-            setOnClickListener {
+        timeframeButton.setOnClickListener {
         
-                val checked = timeframeOptions.map {
-                    selectedTimeframes.contains(it)
-                }.toBooleanArray()
+            val checked = timeframeOptions.map {
+                selectedTimeframes.contains(it)
+            }.toBooleanArray()
         
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Select Timeframes")
-                    .setMultiChoiceItems(
-                        timeframeOptions.toTypedArray(),
-                        checked
-                    ) { _, which, isChecked ->
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Select Timeframes")
+                .setMultiChoiceItems(
+                    timeframeOptions.toTypedArray(),
+                    checked
+                ) { _, which, isChecked ->
         
-                        val value = timeframeOptions[which]
+                    val value = timeframeOptions[which]
         
-                        if (isChecked) {
-                            if (!selectedTimeframes.contains(value)) {
-                                selectedTimeframes.add(value)
-                            }
-                        } else {
-                            selectedTimeframes.remove(value)
+                    if (isChecked) {
+                        if (!selectedTimeframes.contains(value)) {
+                            selectedTimeframes.add(value)
                         }
+                    } else {
+                        selectedTimeframes.remove(value)
                     }
-                    .setPositiveButton("DONE") { _, _ ->
+                }
+                .setPositiveButton("DONE") { _, _ ->
         
-                        if (selectedTimeframes.isEmpty()) {
-                            selectedTimeframes.add("Daily")
-                        }
-        
-                        timeframeButton.text =
-                            selectedTimeframes.joinToString(", ")
+                    if (selectedTimeframes.isEmpty()) {
+                        selectedTimeframes.add("Daily")
                     }
-                    .setNegativeButton("CANCEL", null)
-                    .show()
-            }
+        
+                    timeframeButton.text =
+                        selectedTimeframes.joinToString(", ")
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
         }
         
         root.addView(label("Timeframes"))
