@@ -8,6 +8,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class UpdateWorker(
     appContext: Context,
@@ -143,7 +146,13 @@ class UpdateWorker(
                     successful = finalStatus?.successful ?: successful,
                     failed = finalStatus?.failed ?: failed,
                     retryCount = finalStatus?.retryCount ?: retryCount,
-                    lastUpdateTime = LocalDate.now().toString()
+                    lastUpdateTime =
+                    LocalDateTime.now().format(
+                        DateTimeFormatter.ofPattern(
+                            "hh:mm a, dd/MM/yy",
+                            Locale.ENGLISH
+                        )
+                    )
                 )
 
             } else {
