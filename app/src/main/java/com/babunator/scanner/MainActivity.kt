@@ -168,45 +168,66 @@ class MainActivity : AppCompatActivity() {
     // SCREEN 1 : UPDATE DATA
     // ---------------------------------------------------------
 
-    private fun showUpdateScreen() {
-        content.removeAllViews()
+private fun showUpdateScreen() {
+    content.removeAllViews()
 
-        val root = verticalScroll()
+    val root = verticalScroll()
 
-        root.addView(
-            title("Update Data")
-        )
+    root.addView(
+        title("Update Data")
+    )
 
-        val db = AppDb(this)
-        val updateStatus = db.getUpdateStatus()
-        val workManager = WorkManager.getInstance(this)
-        val updateRunning = false
-        var progressText: TextView
-        var statsText: TextView
-        
-        status = TextView(this).apply {
-            text = if (updateStatus == null) {
-                "Data status: Ready"
-            } else {
-                "Data status: ${updateStatus.processed} / ${updateStatus.total}"
-            }
-            textSize = 16f
-        }
-        
-        root.addView(status, lp())
-        val updateButton = Button(this).apply {
-            text = if (updateRunning) {
-                "UPDATE IN PROGRESS"
-            } else {
-                "UPDATE DATA"
-            }
-        
-            isEnabled = !updateRunning
-        
-            setOnClickListener {
-                val workManager = WorkManager.getInstance(this@MainActivity)
-        
-                val request = OneTimeWorkRequestBuilder<UpdateWorker>()
+    root.addView(
+        TextView(this).apply {
+            text = "Daily market data • Incremental update"
+            textSize = 15f
+            setPadding(0, 0, 0, 12)
+        },
+        lp()
+    )
+
+    val db = AppDb(this)
+    val updateStatus = db.getUpdateStatus()
+
+    var progressText: TextView
+    var statsText: TextView
+
+    // ---------------------------------------------------------
+    // MARKET DATA CARD
+    // ---------------------------------------------------------
+
+    val marketCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(18, 18, 18, 18)
+        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+    }
+
+    marketCard.addView(
+        TextView(this).apply {
+            text = "MARKET DATA"
+            textSize = 18f
+        },
+        lp()
+    )
+
+    marketCard.addView(
+        TextView(this).apply {
+            text = "NSE stock data update"
+            textSize = 14f
+            setPadding(0, 4, 0, 12)
+        },
+        lp()
+    )
+
+    val updateButton = Button(this).apply {
+        text = "UPDATE DATA"
+
+        setOnClickListener {
+            val workManager =
+                WorkManager.getInstance(this@MainActivity)
+
+            val request =
+                OneTimeWorkRequestBuilder<UpdateWorker>()
                     .setInputData(
                         Data.Builder()
                             .putInt("offset", 0)
@@ -214,110 +235,203 @@ class MainActivity : AppCompatActivity() {
                             .build()
                     )
                     .build()
-        
-                workManager.enqueueUniqueWork(
-                    "nse_data_update",
-                    ExistingWorkPolicy.KEEP,
-                    request
-                )
-        
-                text = "UPDATE IN PROGRESS"
-                isEnabled = false
-                status.text = "Update started..."
-            }
-        }
-        
-        root.addView(
-            updateButton,
-            lp()
-        )
-        root.addView(
-            label("Progress")
-        )
-        
-        progressText = TextView(this).apply {
-            text = if (updateStatus == null) {
-                "0 / 0"
-            } else {
-                "${updateStatus.processed} / ${updateStatus.total}"
-            }
-            textSize = 18f
-        }
-        
-        root.addView(progressText, lp())
-        
-        statsText = TextView(this).apply {
-            text = if (updateStatus == null) {
-                "Successful: 0\n" +
-                        "Failed: 0\n" +
-                        "Retry: 0\n" +
-                        "Last update: —"
-            } else {
-                "Successful: ${updateStatus.successful}\n" +
-                        "Failed: ${updateStatus.failed}\n" +
-                        "Retry: ${updateStatus.retryCount}\n" +
-                        "Last update: ${updateStatus.lastUpdateTime ?: "—"}"
-            }
-            textSize = 16f
-        }
-        
-        root.addView(statsText, lp())
 
+            workManager.enqueueUniqueWork(
+                "nse_data_update",
+                ExistingWorkPolicy.KEEP,
+                request
+            )
 
-        root.addView(
-            TextView(this).apply {
-                text = "\nUpdate Data screen is ready.\n\n" +
-                        "• NSE stock list\n" +
-                        "• Incremental update\n" +
-                        "• One retry for failed data\n" +
-                        "• Progress and success/failure count\n" +
-                        "• Last update time\n\n" +
-                        "The actual Worker connection will be added in the Update Data step."
-                textSize = 15f
-            },
-            lp()
-        )
-        lifecycleScope.launch {
-            while (true) {
-                val current = AppDb(this@MainActivity).getUpdateStatus()
-        
-                val updateRunning =
-                    kotlinx.coroutines.withContext(
-                        kotlinx.coroutines.Dispatchers.IO
-                    ) {
-                        WorkManager.getInstance(this@MainActivity)
-                            .getWorkInfosForUniqueWork("nse_data_update")
-                            .get()
-                            .any { !it.state.isFinished }
-                    }
-        
-                updateButton.text =
-                    if (updateRunning) {
-                        "UPDATE IN PROGRESS"
-                    } else {
-                        "UPDATE DATA"
-                    }
-        
-                updateButton.isEnabled = !updateRunning
-        
-                if (current != null) {
-                    progressText.text =
-                        "${current.processed} / ${current.total}"
-        
-                    statsText.text =
-                        "Successful: ${current.successful}\n" +
-                        "Failed: ${current.failed}\n" +
-                        "Retry: ${current.retryCount}\n" +
-                        "Last update: ${current.lastUpdateTime ?: "—"}"
-                }
-        
-                delay(1000)
-            }
+            text = "UPDATE IN PROGRESS"
+            isEnabled = false
+            status.text = "Update started..."
         }
-
-        content.addView(root)
-        
     }
+
+    marketCard.addView(
+        updateButton,
+        LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    )
+
+    marketCard.addView(
+        label("Progress"),
+        lp()
+    )
+
+    progressText = TextView(this).apply {
+        text = if (updateStatus == null) {
+            "0 / 0"
+        } else {
+            "${updateStatus.processed} / ${updateStatus.total}"
+        }
+        textSize = 18f
+        setPadding(0, 6, 0, 6)
+    }
+
+    marketCard.addView(progressText, lp())
+
+    statsText = TextView(this).apply {
+        text = if (updateStatus == null) {
+            "Successful: 0\n" +
+                    "Failed: 0\n" +
+                    "Retry: 0\n" +
+                    "Last update: —"
+        } else {
+            "Successful: ${updateStatus.successful}\n" +
+                    "Failed: ${updateStatus.failed}\n" +
+                    "Retry: ${updateStatus.retryCount}\n" +
+                    "Last update: ${updateStatus.lastUpdateTime ?: "—"}"
+        }
+        textSize = 15f
+        setPadding(0, 6, 0, 0)
+    }
+
+    marketCard.addView(statsText, lp())
+
+    root.addView(
+        marketCard,
+        lp()
+    )
+
+    // ---------------------------------------------------------
+    // DAILY AUTO UPDATE CARD
+    // ---------------------------------------------------------
+
+    val autoCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(18, 18, 18, 18)
+        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+    }
+
+    autoCard.addView(
+        TextView(this).apply {
+            text = "DAILY AUTO UPDATE"
+            textSize = 18f
+        },
+        lp()
+    )
+
+    autoCard.addView(
+        TextView(this).apply {
+            text = "Automatic daily update will use the same incremental data flow."
+            textSize = 14f
+            setPadding(0, 4, 0, 0)
+        },
+        lp()
+    )
+
+    root.addView(
+        autoCard,
+        lp()
+    )
+
+    // ---------------------------------------------------------
+    // HOW RESUME WORKS CARD
+    // ---------------------------------------------------------
+
+    val resumeCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(18, 18, 18, 18)
+        setBackgroundResource(android.R.drawable.dialog_holo_light_frame)
+    }
+
+    resumeCard.addView(
+        TextView(this).apply {
+            text = "HOW RESUME WORKS"
+            textSize = 18f
+        },
+        lp()
+    )
+
+    resumeCard.addView(
+        TextView(this).apply {
+            text =
+                "• Existing data is kept\\n" +
+                "• Update continues incrementally\\n" +
+                "• Failed data is retried\\n" +
+                "• Progress and status are saved"
+            textSize = 14f
+            setPadding(0, 8, 0, 0)
+        },
+        lp()
+    )
+
+    root.addView(
+        resumeCard,
+        lp()
+    )
+
+    // ---------------------------------------------------------
+    // CURRENT STATUS
+    // ---------------------------------------------------------
+
+    status = TextView(this).apply {
+        text = if (updateStatus == null) {
+            "Data status: Ready"
+        } else {
+            "Data status: ${updateStatus.processed} / ${updateStatus.total}"
+        }
+        textSize = 15f
+        setPadding(0, 12, 0, 8)
+    }
+
+    root.addView(status, lp())
+
+    // ---------------------------------------------------------
+    // EXISTING WORKMANAGER PROGRESS MONITOR
+    // ---------------------------------------------------------
+
+    lifecycleScope.launch {
+        while (true) {
+
+            val current =
+                AppDb(this@MainActivity).getUpdateStatus()
+
+            val updateRunning =
+                kotlinx.coroutines.withContext(
+                    kotlinx.coroutines.Dispatchers.IO
+                ) {
+                    WorkManager.getInstance(this@MainActivity)
+                        .getWorkInfosForUniqueWork(
+                            "nse_data_update"
+                        )
+                        .get()
+                        .any { !it.state.isFinished }
+                }
+
+            updateButton.text =
+                if (updateRunning) {
+                    "UPDATE IN PROGRESS"
+                } else {
+                    "UPDATE DATA"
+                }
+
+            updateButton.isEnabled = !updateRunning
+
+            if (current != null) {
+
+                progressText.text =
+                    "${current.processed} / ${current.total}"
+
+                statsText.text =
+                    "Successful: ${current.successful}\n" +
+                    "Failed: ${current.failed}\n" +
+                    "Retry: ${current.retryCount}\n" +
+                    "Last update: ${current.lastUpdateTime ?: "—"}"
+
+                status.text =
+                    "Data status: ${current.processed} / ${current.total}"
+            }
+
+            delay(1000)
+        }
+    }
+
+    content.addView(root)
+}
 
     // ---------------------------------------------------------
     // SCREEN 2 : SCANNER
