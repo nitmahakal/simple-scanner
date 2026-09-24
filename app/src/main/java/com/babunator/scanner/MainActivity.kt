@@ -329,14 +329,26 @@ private fun showUpdateScreen() {
         lp()
     )
 
-    autoCard.addView(
-        TextView(this).apply {
-            text = "Automatic daily update will use the same incremental data flow."
-            textSize = 14f
-            setPadding(0, 4, 0, 0)
-        },
-        lp()
-    )
+        autoCard.addView(
+                TextView(this).apply {
+                    text = "Automatic daily update will use the same incremental data flow."
+                    textSize = 14f
+                    setPadding(0, 4, 0, 8)
+                },
+                lp()
+        )
+
+        autoCard.addView(
+                Button(this).apply {
+                    text = "AUTO UPDATE: OFF"
+                    textSize = 14f
+                    minHeight = 52
+                    minimumHeight = 52
+                    isEnabled = false
+                },
+                lp()
+        )
+    
 
     root.addView(
         autoCard,
