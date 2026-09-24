@@ -59,7 +59,7 @@ class DataProvider {
 
         val url =
             "https://query1.finance.yahoo.com/v8/finance/chart/$q" +
-                    "?range=${if (days <= 20) "15d" else "2y"}" +
+                    "?range=max" +
                     "&interval=1d&events=div%2Csplits"
 
         return parseDaily(symbol, get(url))
