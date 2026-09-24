@@ -1,3 +1,4 @@
+
 package com.babunator.scanner
 
 import android.content.Context
@@ -52,17 +53,18 @@ class UpdateWorker(
             for (s in part) {
 
                 val history = db.getHistory(s, 60)
+                val historyInitialized = db.isHistoryInitialized(s)
 
                 var updated = false
 
                 // First attempt.
                 try {
-                    val rows = if (history.size < 60) {
-                        // New / insufficient history:
-                        // fetch a larger historical range.
+                    val rows = if (!historyInitialized) {
+                        // First complete initialization:
+                        // fetch maximum available daily history.
                         provider.fetchDaily(s, 500)
                     } else {
-                        // Existing history:
+                        // Already initialized:
                         // fetch only from the last stored date onward.
                         // Including the last date allows today's value
                         // to be refreshed and safely replaced by upsert.
@@ -78,6 +80,11 @@ class UpdateWorker(
                     }
 
                     db.upsertPrices(s, rows)
+
+                    if (!historyInitialized) {
+                        db.markHistoryInitialized(s)
+                    }
+
                     updated = true
 
                 } catch (_: Exception) {
@@ -88,7 +95,7 @@ class UpdateWorker(
                     retryCount++
 
                     try {
-                        val rows = if (history.size < 60) {
+                        val rows = if (!historyInitialized) {
                             provider.fetchDaily(s, 500)
                         } else {
                             val lastDate = history.lastOrNull()
@@ -103,6 +110,11 @@ class UpdateWorker(
                         }
 
                         db.upsertPrices(s, rows)
+
+                        if (!historyInitialized) {
+                            db.markHistoryInitialized(s)
+                        }
+
                         updated = true
 
                     } catch (_: Exception) {
