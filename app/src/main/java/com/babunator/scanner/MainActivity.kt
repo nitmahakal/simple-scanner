@@ -17,6 +17,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -59,6 +61,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var content: FrameLayout
     private lateinit var status: TextView
+    private var updateMonitorJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
@@ -169,6 +172,7 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------
 
 private fun showUpdateScreen() {
+    updateMonitorJob?.cancel()
     content.removeAllViews()
 
     val root = verticalScroll()
@@ -490,11 +494,11 @@ private fun showUpdateScreen() {
     // EXISTING WORKMANAGER PROGRESS MONITOR
     // ---------------------------------------------------------
 
-    lifecycleScope.launch {
-        while (true) {
+    updateMonitorJob = lifecycleScope.launch {
+    while (isActive) {
 
-            val current =
-                AppDb(this@MainActivity).getUpdateStatus()
+        val current =
+            AppDb(this@MainActivity).getUpdateStatus()
 
             val updateRunning =
                 kotlinx.coroutines.withContext(
@@ -561,6 +565,7 @@ private fun showUpdateScreen() {
     // ---------------------------------------------------------
 
     private fun showScannerScreen() {
+        updateMonitorJob?.cancel()
         content.removeAllViews()
         rows.clear()
 
@@ -859,6 +864,7 @@ private fun showUpdateScreen() {
     // ---------------------------------------------------------
 
     private fun showSavedScreen() {
+        updateMonitorJob?.cancel()
         content.removeAllViews()
 
         val root = verticalScroll()
