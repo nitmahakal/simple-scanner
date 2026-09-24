@@ -218,33 +218,36 @@ private fun showUpdateScreen() {
         },
         lp()
     )
-
+        
     val updateButton = Button(this).apply {
         text = "UPDATE DATA"
-
+        textSize = 14f
+        minHeight = 52
+        minimumHeight = 52
+        
         setOnClickListener {
-            val workManager =
-                WorkManager.getInstance(this@MainActivity)
-
-            val request =
-                OneTimeWorkRequestBuilder<UpdateWorker>()
-                    .setInputData(
-                        Data.Builder()
-                            .putInt("offset", 0)
-                            .putInt("limit", 25)
-                            .build()
-                    )
-                    .build()
-
-            workManager.enqueueUniqueWork(
-                "nse_data_update",
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-
-            text = "UPDATE IN PROGRESS"
-            isEnabled = false
-            status.text = "Update started..."
+        val workManager =
+            WorkManager.getInstance(this@MainActivity)
+        
+        val request =
+            OneTimeWorkRequestBuilder<UpdateWorker>()
+                .setInputData(
+                    Data.Builder()
+                        .putInt("offset", 0)
+                        .putInt("limit", 25)
+                        .build()
+                )
+                .build()
+        
+        workManager.enqueueUniqueWork(
+            "nse_data_update",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
+        
+        text = "UPDATE IN PROGRESS"
+        isEnabled = false
+        status.text = "Update started..."
         }
     }
 
