@@ -35,16 +35,26 @@ class DailyStarterWorker(appContext: Context, params: WorkerParameters) : Worker
 
 object WorkChain {
     fun enqueue(context: Context) {
-        val db = AppDb(context)
-        val symbols = try { DataProvider().fetchSymbolList() } catch (_: Exception) { db.symbols() }
-        val wm = WorkManager.getInstance(context)
-        var chain = wm.beginUniqueWork("update-scan-run", ExistingWorkPolicy.REPLACE, updateRequest(0))
-        var offset = 25
-        while (offset < symbols.size) { chain = chain.then(updateRequest(offset)); offset += 25 }
-        chain.then(OneTimeWorkRequestBuilder<ScanWorker>().build()).enqueue()
+        val request =
+            OneTimeWorkRequestBuilder<UpdateWorker>()
+                .setInputData(
+                    Data.Builder()
+                        .putInt("offset", 0)
+                        .putInt("limit", 25)
+                        .build()
+                )
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(
+                "nse_data_update",
+                ExistingWorkPolicy.KEEP,
+                request
+            )
     }
-    private fun updateRequest(offset: Int) = OneTimeWorkRequestBuilder<UpdateWorker>()
-        .setInputData(Data.Builder().putInt("offset", offset).putInt("limit", 25).build())
-        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-        .build()
 }
