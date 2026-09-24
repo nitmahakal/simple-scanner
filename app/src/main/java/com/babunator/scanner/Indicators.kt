@@ -1,569 +1,1238 @@
 package com.babunator.scanner
 
-import kotlin.math.*
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 object Indicators {
-    fun sma(x: List<Double>, n: Int): List<Double?> {
+
+    /*
+     * Simple Moving Average
+     */
+    fun sma(
+        x: List<Double>,
+        n: Int
+    ): List<Double?> {
+
         val out = MutableList<Double?>(x.size) { null }
+
         if (n <= 0) return out
+
         var sum = 0.0
+
         for (i in x.indices) {
+
             sum += x[i]
-            if (i >= n) sum -= x[i - n]
-            if (i >= n - 1) out[i] = sum / n
-        }
-        return out
-    }
 
-    fun ema(x: List<Double>, n: Int): List<Double?> {
-        val out = MutableList<Double?>(x.size) { null }
-        if (n <= 0 || x.size < n) return out
-        var prev = x.take(n).average()
-        out[n - 1] = prev
-        val a = 2.0 / (n + 1.0)
-        for (i in n until x.size) {
-            prev = a * x[i] + (1 - a) * prev
-            out[i] = prev
-        }
-        return out
-    }
-
-    fun rsi(x: List<Double>, n: Int): List<Double?> {
-        val out = MutableList<Double?>(x.size) { null }
-        if (n <= 0 || x.size <= n) return out
-
-        var gain = 0.0
-        var loss = 0.0
-
-        for (i in 1..n) {
-            val d = x[i] - x[i - 1]
-            if (d >= 0) gain += d else loss -= d
-        }
-
-        var ag = gain / n
-        var al = loss / n
-
-        out[n] =
-            if (al == 0.0) {
-                100.0
-            } else {
-                100.0 - 100.0 / (1 + ag / al)
+            if (i >= n) {
+                sum -= x[i - n]
             }
 
-        for (i in n + 1 until x.size) {
-            val d = x[i] - x[i - 1]
-            val g = max(d, 0.0)
-            val l = max(-d, 0.0)
+            if (i >= n - 1) {
+                out[i] = sum / n
+            }
+        }
 
-            ag = (ag * (n - 1) + g) / n
-            al = (al * (n - 1) + l) / n
+        return out
+    }
+
+    /*
+     * EMA
+     *
+     * Standard EMA seed:
+     * SMA of the first n values.
+     */
+    fun ema(
+        x: List<Double>,
+        n: Int
+    ): List<Double?> {
+
+        val out = MutableList<Double?>(x.size) { null }
+
+        if (n <= 0 || x.size < n) {
+            return out
+        }
+
+        var prev = x.take(n).average()
+
+        out[n - 1] = prev
+
+        val alpha = 2.0 / (n + 1.0)
+
+        for (i in n until x.size) {
+
+            prev =
+                alpha * x[i] +
+                        (1.0 - alpha) * prev
+
+            out[i] = prev
+        }
+
+        return out
+    }
+
+    /*
+     * EMA for a nullable series.
+     *
+     * This is important for indicators such as
+     * EMA of RSI. Invalid warm-up values are NOT
+     * converted to zero.
+     */
+    private fun emaNullable(
+        x: List<Double?>,
+        n: Int
+    ): List<Double?> {
+
+        val out = MutableList<Double?>(x.size) { null }
+
+        if (n <= 0) return out
+
+        var start = -1
+
+        for (i in x.indices) {
+            if (x[i] != null) {
+                start = i
+                break
+            }
+        }
+
+        if (start < 0) return out
+
+        val validCount =
+            x.size - start
+
+        if (validCount < n) {
+            return out
+        }
+
+        var seedSum = 0.0
+
+        for (i in start until start + n) {
+            val v = x[i] ?: return out
+            seedSum += v
+        }
+
+        var prev = seedSum / n
+
+        out[start + n - 1] = prev
+
+        val alpha = 2.0 / (n + 1.0)
+
+        for (i in start + n until x.size) {
+
+            val v = x[i] ?: continue
+
+            prev =
+                alpha * v +
+                        (1.0 - alpha) * prev
+
+            out[i] = prev
+        }
+
+        return out
+    }
+
+    /*
+     * Wilder RMA / SMMA
+     *
+     * TradingView RSI uses RMA for average gain/loss.
+     */
+    fun rma(
+        x: List<Double>,
+        n: Int
+    ): List<Double?> {
+
+        val out = MutableList<Double?>(x.size) { null }
+
+        if (n <= 0 || x.size < n) {
+            return out
+        }
+
+        var prev = x.take(n).average()
+
+        out[n - 1] = prev
+
+        val alpha = 1.0 / n.toDouble()
+
+        for (i in n until x.size) {
+
+            prev =
+                alpha * x[i] +
+                        (1.0 - alpha) * prev
+
+            out[i] = prev
+        }
+
+        return out
+    }
+
+    /*
+     * TradingView-compatible RSI structure:
+     *
+     * change
+     * gain / loss
+     * RMA(gain)
+     * RMA(loss)
+     * RSI = 100 - 100 / (1 + RS)
+     */
+    fun rsi(
+        x: List<Double>,
+        n: Int
+    ): List<Double?> {
+
+        val out = MutableList<Double?>(x.size) { null }
+
+        if (n <= 0 || x.size <= n) {
+            return out
+        }
+
+        val gains =
+            MutableList(x.size) { 0.0 }
+
+        val losses =
+            MutableList(x.size) { 0.0 }
+
+        for (i in 1 until x.size) {
+
+            val change =
+                x[i] - x[i - 1]
+
+            if (change >= 0.0) {
+                gains[i] = change
+            } else {
+                losses[i] = -change
+            }
+        }
+
+        val avgGain =
+            rma(gains, n)
+
+        val avgLoss =
+            rma(losses, n)
+
+        for (i in x.indices) {
+
+            val gain = avgGain[i]
+            val loss = avgLoss[i]
+
+            if (gain == null || loss == null) {
+                continue
+            }
 
             out[i] =
-                if (al == 0.0) {
-                    100.0
-                } else {
-                    100.0 - 100.0 / (1 + ag / al)
+                when {
+                    loss == 0.0 && gain == 0.0 ->
+                        0.0
+
+                    loss == 0.0 ->
+                        100.0
+
+                    else -> {
+                        val rs = gain / loss
+
+                        100.0 -
+                                100.0 / (1.0 + rs)
+                    }
                 }
         }
 
         return out
     }
 
-    fun wma(x: List<Double>, n: Int): List<Double?> {
-        val out = MutableList<Double?>(x.size) { null }
-        if (n <= 0) return out
-
-        val den = n * (n + 1) / 2.0
-
-        for (i in n - 1 until x.size) {
-            var s = 0.0
-
-            for (j in 0 until n) {
-                s += x[i - n + 1 + j] * (j + 1)
-            }
-
-            out[i] = s / den
-        }
-
-        return out
-    }
-
-    fun hma(x: List<Double>, n: Int): List<Double?> {
-        if (n < 2) return x.map { it }
-
-        val half = max(1, n / 2)
-        val root = max(1, sqrt(n.toDouble()).roundToInt())
-
-        val w1 = wma(x, half)
-        val w2 = wma(x, n)
-
-        val diff = x.indices.map { i ->
-            val a = w1[i]
-            val b = w2[i]
-
-            if (a != null && b != null) {
-                2 * a - b
-            } else {
-                Double.NaN
-            }
-        }
-
-        val valid = diff.map {
-            if (it.isNaN()) 0.0 else it
-        }
-
-        val h = wma(valid, root)
-
-        return h.mapIndexed { i, v ->
-            if (diff[i].isNaN()) null else v
-        }
-    }
-
-    fun stochRawFromRsi(
-        rsi: List<Double?>,
+    /*
+     * Weighted Moving Average
+     */
+    fun wma(
+        x: List<Double>,
         n: Int
     ): List<Double?> {
-        val out = MutableList<Double?>(rsi.size) { null }
 
-        for (i in rsi.indices) {
-            if (i < n - 1) continue
+        val out = MutableList<Double?>(x.size) { null }
 
-            val win = rsi
-                .subList(i - n + 1, i + 1)
-                .filterNotNull()
+        if (n <= 0) return out
 
-            if (win.size == n) {
-                val lo = win.min()
-                val hi = win.max()
+        val denominator =
+            n * (n + 1) / 2.0
+
+        for (i in n - 1 until x.size) {
+
+            var sum = 0.0
+
+            for (j in 0 until n) {
+
+                sum +=
+                    x[i - n + 1 + j] *
+                            (j + 1)
+            }
+
+            out[i] =
+                sum / denominator
+        }
+
+        return out
+    }
+
+    /*
+     * Hull Moving Average
+     *
+     * HMA(n) =
+     * WMA(
+     *     2 * WMA(price, n/2) - WMA(price, n),
+     *     sqrt(n)
+     * )
+     */
+    fun hma(
+        x: List<Double>,
+        n: Int
+    ): List<Double?> {
+
+        val out =
+            MutableList<Double?>(x.size) { null }
+
+        if (n <= 0 || x.isEmpty()) {
+            return out
+        }
+
+        if (n == 1) {
+            return x.map { it }
+        }
+
+        val half =
+            max(1, n / 2)
+
+        val root =
+            max(
+                1,
+                sqrt(n.toDouble()).roundToInt()
+            )
+
+        val halfWma =
+            wma(x, half)
+
+        val fullWma =
+            wma(x, n)
+
+        val diff =
+            MutableList<Double?>(x.size) { null }
+
+        for (i in x.indices) {
+
+            val a = halfWma[i]
+            val b = fullWma[i]
+
+            if (a != null && b != null) {
+                diff[i] =
+                    2.0 * a - b
+            }
+        }
+
+        /*
+         * WMA over the valid HMA intermediate series.
+         * No zero-padding of invalid warm-up values.
+         */
+        for (i in x.indices) {
+
+            if (i < n + root - 2) {
+                continue
+            }
+
+            var sum = 0.0
+            var valid = true
+
+            for (j in 0 until root) {
+
+                val value =
+                    diff[i - root + 1 + j]
+
+                if (value == null) {
+                    valid = false
+                    break
+                }
+
+                sum +=
+                    value * (j + 1)
+            }
+
+            if (valid) {
+
+                val denominator =
+                    root * (root + 1) / 2.0
 
                 out[i] =
-                    if (hi == lo) {
-                        0.0
-                    } else {
-                        100.0 * (rsi[i]!! - lo) / (hi - lo)
-                    }
+                    sum / denominator
             }
         }
 
         return out
     }
 
+    /*
+     * Stochastic value of an RSI series.
+     *
+     * Raw Stoch RSI:
+     *
+     * 100 * (RSI - lowest RSI) /
+     *      (highest RSI - lowest RSI)
+     */
+    fun stochRawFromRsi(
+        rsiValues: List<Double?>,
+        n: Int
+    ): List<Double?> {
+
+        val out =
+            MutableList<Double?>(
+                rsiValues.size
+            ) { null }
+
+        if (n <= 0) return out
+
+        for (i in rsiValues.indices) {
+
+            if (i < n - 1) {
+                continue
+            }
+
+            val window =
+                rsiValues.subList(
+                    i - n + 1,
+                    i + 1
+                )
+
+            if (window.any { it == null }) {
+                continue
+            }
+
+            val values =
+                window.map { it!! }
+
+            val current =
+                values.last()
+
+            val lowest =
+                values.minOrNull()
+                    ?: continue
+
+            val highest =
+                values.maxOrNull()
+                    ?: continue
+
+            out[i] =
+                if (highest == lowest) {
+                    0.0
+                } else {
+                    100.0 *
+                            (current - lowest) /
+                            (highest - lowest)
+                }
+        }
+
+        return out
+    }
+
+    /*
+     * SMA smoothing of raw Stoch RSI.
+     *
+     * Invalid warm-up values are NOT replaced
+     * by zero.
+     */
     fun stochK(
         raw: List<Double?>,
         k: Int
-    ) =
-        sma(
-            raw.map { it ?: Double.NaN }
-                .map {
-                    if (it.isNaN()) 0.0 else it
-                },
-            k
-        )
+    ): List<Double?> {
+        return smaNullable(raw, k)
+    }
 
     fun stochD(
         k: List<Double?>,
         d: Int
-    ) =
-        sma(
-            k.map { it ?: 0.0 },
-            d
-        )
+    ): List<Double?> {
+        return smaNullable(k, d)
+    }
 
+    private fun smaNullable(
+        x: List<Double?>,
+        n: Int
+    ): List<Double?> {
+
+        val out =
+            MutableList<Double?>(x.size) { null }
+
+        if (n <= 0) return out
+
+        for (i in x.indices) {
+
+            if (i < n - 1) {
+                continue
+            }
+
+            var sum = 0.0
+            var valid = true
+
+            for (j in 0 until n) {
+
+                val value =
+                    x[i - n + 1 + j]
+
+                if (value == null) {
+                    valid = false
+                    break
+                }
+
+                sum += value
+            }
+
+            if (valid) {
+                out[i] =
+                    sum / n
+            }
+        }
+
+        return out
+    }
+
+    /*
+     * MACD
+     *
+     * MACD       = Fast EMA - Slow EMA
+     * Signal     = EMA(MACD, Signal Length)
+     * Histogram  = MACD - Signal
+     */
     fun macd(
         x: List<Double>,
-        fast: Int = 12,
-        slow: Int = 26,
-        signal: Int = 9
+        fast: Int,
+        slow: Int,
+        signal: Int
     ): Triple<
             List<Double?>,
             List<Double?>,
             List<Double?>
             > {
 
-        val ef = ema(x, fast)
-        val es = ema(x, slow)
+        val line =
+            MutableList<Double?>(x.size) { null }
 
-        val line = x.indices.map { i ->
-            if (ef[i] != null && es[i] != null) {
-                ef[i]!! - es[i]!!
-            } else {
-                null
+        val fastEma =
+            ema(x, fast)
+
+        val slowEma =
+            ema(x, slow)
+
+        for (i in x.indices) {
+
+            val f = fastEma[i]
+            val s = slowEma[i]
+
+            if (f != null && s != null) {
+                line[i] =
+                    f - s
             }
         }
 
-        val clean = line.map { it ?: 0.0 }
-        val sig = ema(clean, signal)
+        val signalLine =
+            emaNullable(
+                line,
+                signal
+            )
 
-        val hist = line.indices.map { i ->
-            if (line[i] != null && sig[i] != null) {
-                line[i]!! - sig[i]!!
-            } else {
-                null
+        val histogram =
+            MutableList<Double?>(
+                x.size
+            ) { null }
+
+        for (i in x.indices) {
+
+            val m = line[i]
+            val s = signalLine[i]
+
+            if (m != null && s != null) {
+                histogram[i] =
+                    m - s
             }
         }
 
-        return Triple(line, sig, hist)
+        return Triple(
+            line,
+            signalLine,
+            histogram
+        )
     }
 
     /*
-     * Reverse RSI:
+     * Reverse RSI price calculation.
      *
-     * RSI Length     = RSI calculation period
-     * Smoothing      = SMA length applied to RSI
-     * Target Level   = desired smoothed RSI level
+     * This is a price-inversion utility, not a
+     * TradingView built-in indicator.
      *
-     * Output is the price required to reach the target
-     * smoothed RSI level.
+     * p[0] = RSI Length
+     * p[1] = Smoothing Length
+     * p[2] = Level
+     *
+     * The smoothing is an SMA of RSI values.
      */
     fun reverseRsiPrice(
         series: List<Double>,
-        target: Double,
+        level: Double,
         rsiLength: Int,
         smoothingLength: Int
     ): Double? {
 
         if (
-            rsiLength <= 1 ||
+            rsiLength <= 0 ||
             smoothingLength <= 0 ||
-            series.size < rsiLength + smoothingLength + 2 ||
-            target !in 0.0..100.0
+            level !in 0.0..100.0
         ) {
             return null
         }
 
-        val r = rsi(series, rsiLength)
-
-        /*
-         * We need the previous smoothingLength - 1 RSI values.
-         * The current RSI is the unknown value that must make
-         * the smoothed RSI equal to the requested target.
-         */
-        val previousRsi =
-            r.dropLast(1)
-                .takeLast(smoothingLength - 1)
-                .filterNotNull()
-
-        if (previousRsi.size != smoothingLength - 1) {
+        if (
+            series.size <
+            rsiLength +
+            smoothingLength +
+            2
+        ) {
             return null
         }
 
-        /*
-         * Target SMA:
-         *
-         * (previous RSI sum + current RSI) / smoothingLength
-         * = target
-         *
-         * Therefore:
-         *
-         * current RSI =
-         * target * smoothingLength - previous RSI sum
-         */
-        val targetRsi =
-            target * smoothingLength - previousRsi.sum()
+        val r =
+            rsi(
+                series,
+                rsiLength
+            )
 
-        if (targetRsi !in 0.0..100.0) {
+        val previous =
+            r.dropLast(1)
+                .takeLast(
+                    smoothingLength - 1
+                )
+                .filterNotNull()
+
+        if (
+            previous.size !=
+            smoothingLength - 1
+        ) {
+            return null
+        }
+
+        val requiredCurrentRsi =
+            level * smoothingLength -
+                    previous.sum()
+
+        if (
+            requiredCurrentRsi !in 0.0..100.0
+        ) {
             return null
         }
 
         return reverseRsiRawPrice(
-            series = series,
-            target = targetRsi,
-            rsiLength = rsiLength
+            series,
+            requiredCurrentRsi,
+            rsiLength
         )
     }
 
     /*
-     * Reverse of the raw RSI calculation.
+     * Price required to make the current RSI
+     * equal to a specified level.
      */
     private fun reverseRsiRawPrice(
         series: List<Double>,
-        target: Double,
+        level: Double,
         rsiLength: Int
     ): Double? {
 
         if (
-            rsiLength <= 1 ||
+            rsiLength <= 0 ||
             series.size < rsiLength + 1 ||
-            target !in 0.0..100.0
+            level !in 0.0..100.0
         ) {
             return null
         }
 
-        val closes = series.takeLast(rsiLength + 1)
+        val closes =
+            series.takeLast(
+                rsiLength + 1
+            )
 
-        var avgGain = 0.0
-        var avgLoss = 0.0
+        var gainSum = 0.0
+        var lossSum = 0.0
 
         for (i in 1..rsiLength) {
-            val d = closes[i] - closes[i - 1]
 
-            if (d >= 0) {
-                avgGain += d
+            val change =
+                closes[i] -
+                        closes[i - 1]
+
+            if (change >= 0.0) {
+                gainSum += change
             } else {
-                avgLoss -= d
+                lossSum -= change
             }
         }
 
-        avgGain /= rsiLength
-        avgLoss /= rsiLength
+        /*
+         * Wilder RMA update:
+         *
+         * newAvg =
+         * (oldAvg * (n - 1) + current) / n
+         */
+        val oldGain =
+            gainSum / rsiLength
 
-        if (target <= 0.0) {
-            return closes.last() -
-                    max(1.0, closes.last() * 0.5)
-        }
+        val oldLoss =
+            lossSum / rsiLength
 
-        if (target >= 100.0) {
-            return closes.last() +
-                    max(1.0, closes.last() * 0.5)
+        when {
+            level <= 0.0 ->
+                return closes.last() -
+                        max(
+                            1.0,
+                            abs(closes.last()) * 0.5
+                        )
+
+            level >= 100.0 ->
+                return closes.last() +
+                        max(
+                            1.0,
+                            abs(closes.last()) * 0.5
+                        )
         }
 
         val rs =
-            target / (100.0 - target)
+            level /
+                    (100.0 - level)
 
-        val k = rsiLength - 1.0
+        val k =
+            rsiLength - 1.0
 
-        val upDelta =
-            k * (rs * avgLoss - avgGain)
+        val requiredUpMove =
+            k *
+                    (
+                        rs * oldLoss -
+                                oldGain
+                        )
 
-        val downAbs =
-            k * (avgGain / rs - avgLoss)
+        val requiredDownMove =
+            k *
+                    (
+                        oldGain / rs -
+                                oldLoss
+                        )
 
         val delta =
             when {
-                upDelta >= 0.0 -> upDelta
-                downAbs > 0.0 -> -downAbs
-                else -> 0.0
+                requiredUpMove >= 0.0 ->
+                    requiredUpMove
+
+                requiredDownMove > 0.0 ->
+                    -requiredDownMove
+
+                else ->
+                    0.0
             }
 
         return closes.last() + delta
     }
 
-    private fun stochRawAtCurrentRsi(
+    /*
+     * Reverse Stoch RSI raw level.
+     */
+    private fun reverseStochRawPrice(
         series: List<Double>,
-        rsiN: Int,
-        stochN: Int,
-        targetRaw: Double
+        level: Double,
+        rsiLength: Int,
+        stochLength: Int
     ): Double? {
 
-        if (series.size < rsiN + stochN + 2) {
+        if (
+            level !in 0.0..100.0 ||
+            rsiLength <= 0 ||
+            stochLength <= 0
+        ) {
             return null
         }
 
-        val r = rsi(series, rsiN)
+        val r =
+            rsi(
+                series,
+                rsiLength
+            )
 
         val previous =
             r.dropLast(1)
-                .takeLast(stochN - 1)
+                .takeLast(
+                    stochLength - 1
+                )
                 .filterNotNull()
 
-        if (previous.size != stochN - 1) {
+        if (
+            previous.size !=
+            stochLength - 1
+        ) {
             return null
         }
 
-        val lo = previous.minOrNull() ?: return null
-        val hi = previous.maxOrNull() ?: return null
+        val lowest =
+            previous.minOrNull()
+                ?: return null
 
-        return lo +
-                (hi - lo) *
-                (targetRaw / 100.0)
-    }
+        val highest =
+            previous.maxOrNull()
+                ?: return null
 
-    private fun reverseStoch(
-        series: List<Double>,
-        target: Double,
-        rsiN: Int,
-        stochN: Int
-    ): Double? {
-
-        val r = rsi(series, rsiN)
-
-        val prev =
-            r.dropLast(1)
-                .takeLast(stochN - 1)
-                .filterNotNull()
-
-        if (prev.size != stochN - 1) {
-            return null
-        }
-
-        val lo = prev.minOrNull() ?: return null
-        val hi = prev.maxOrNull() ?: return null
-
-        val targetRsi =
-            lo +
-                    (hi - lo) *
-                    (target / 100.0)
+        val requiredRsi =
+            lowest +
+                    (
+                        highest - lowest
+                        ) *
+                    level / 100.0
 
         return reverseRsiRawPrice(
             series,
-            targetRsi,
-            rsiN
+            requiredRsi,
+            rsiLength
         )
     }
 
-    private fun reverseStochK(
+    /*
+     * Reverse Stoch RSI %K.
+     *
+     * p[0] = RSI Length
+     * p[1] = Stoch Length
+     * p[2] = K Length
+     * p[3] = Level
+     */
+    private fun reverseStochKPrice(
         series: List<Double>,
-        targetK: Double,
-        rsiN: Int,
-        stochN: Int,
-        kN: Int
+        level: Double,
+        rsiLength: Int,
+        stochLength: Int,
+        kLength: Int
     ): Double? {
 
-        val r = rsi(series, rsiN)
-        val raw = stochRawFromRsi(r, stochN)
+        if (
+            level !in 0.0..100.0 ||
+            rsiLength <= 0 ||
+            stochLength <= 0 ||
+            kLength <= 0
+        ) {
+            return null
+        }
 
-        val prev =
+        val r =
+            rsi(
+                series,
+                rsiLength
+            )
+
+        val raw =
+            stochRawFromRsi(
+                r,
+                stochLength
+            )
+
+        val previous =
             raw.dropLast(1)
-                .takeLast(kN - 1)
+                .takeLast(
+                    kLength - 1
+                )
                 .filterNotNull()
 
-        if (prev.size != kN - 1) {
+        if (
+            previous.size !=
+            kLength - 1
+        ) {
             return null
         }
 
-        val targetRaw =
-            targetK * kN - prev.sum()
+        val requiredRaw =
+            level * kLength -
+                    previous.sum()
 
-        return reverseStoch(
+        if (
+            requiredRaw !in 0.0..100.0
+        ) {
+            return null
+        }
+
+        return reverseStochRawPrice(
             series,
-            targetRaw,
-            rsiN,
-            stochN
+            requiredRaw,
+            rsiLength,
+            stochLength
         )
     }
 
-    private fun reverseStochD(
+    /*
+     * Reverse Stoch RSI %D.
+     *
+     * p[0] = RSI Length
+     * p[1] = Stoch Length
+     * p[2] = K Length
+     * p[3] = D Length
+     * p[4] = Level
+     */
+    private fun reverseStochDPrice(
         series: List<Double>,
-        targetD: Double,
-        rsiN: Int,
-        stochN: Int,
-        kN: Int,
-        dN: Int
+        level: Double,
+        rsiLength: Int,
+        stochLength: Int,
+        kLength: Int,
+        dLength: Int
     ): Double? {
 
-        val r = rsi(series, rsiN)
-        val raw = stochRawFromRsi(r, stochN)
-        val k = stochK(raw, kN)
-
-        val prevK =
-            k.dropLast(1)
-                .takeLast(dN - 1)
-                .filterNotNull()
-
-        if (prevK.size != dN - 1) {
+        if (
+            level !in 0.0..100.0 ||
+            rsiLength <= 0 ||
+            stochLength <= 0 ||
+            kLength <= 0 ||
+            dLength <= 0
+        ) {
             return null
         }
 
-        val targetK =
-            targetD * dN - prevK.sum()
+        val r =
+            rsi(
+                series,
+                rsiLength
+            )
 
-        return reverseStochK(
+        val raw =
+            stochRawFromRsi(
+                r,
+                stochLength
+            )
+
+        val k =
+            stochK(
+                raw,
+                kLength
+            )
+
+        val previous =
+            k.dropLast(1)
+                .takeLast(
+                    dLength - 1
+                )
+                .filterNotNull()
+
+        if (
+            previous.size !=
+            dLength - 1
+        ) {
+            return null
+        }
+
+        val requiredK =
+            level * dLength -
+                    previous.sum()
+
+        if (
+            requiredK !in 0.0..100.0
+        ) {
+            return null
+        }
+
+        return reverseStochKPrice(
             series,
-            targetK,
-            rsiN,
-            stochN,
-            kN
+            requiredK,
+            rsiLength,
+            stochLength,
+            kLength
         )
     }
 
+    /*
+     * Main indicator dispatcher.
+     *
+     * IMPORTANT:
+     * There are NO hidden indicator lengths here.
+     *
+     * The UI/configuration must supply the required
+     * parameters.
+     */
     fun valueAt(
         x: List<Double>,
         name: String,
         p: List<Double>
     ): Double? {
 
-        val n1 =
-            p.getOrElse(0) { 14.0 }
-                .toInt()
-                .coerceAtLeast(1)
+        fun intParam(index: Int): Int? {
+
+            val value =
+                p.getOrNull(index)
+                    ?: return null
+
+            if (
+                value.isNaN() ||
+                value.isInfinite()
+            ) {
+                return null
+            }
+
+            val n =
+                value.toInt()
+
+            return n.takeIf {
+                it > 0
+            }
+        }
+
+        fun levelParam(index: Int): Double? {
+
+            val value =
+                p.getOrNull(index)
+                    ?: return null
+
+            return value.takeIf {
+                it.isFinite() &&
+                        it in 0.0..100.0
+            }
+        }
 
         return when (name) {
 
             "Close" ->
                 x.lastOrNull()
 
-            "EMA" ->
-                ema(x, n1)
-                    .lastOrNull { it != null }
+            "EMA" -> {
 
-            "HMA" ->
-                hma(x, n1)
-                    .lastOrNull { it != null }
-
-            "RSI" ->
-                rsi(x, n1)
-                    .lastOrNull { it != null }
-
-            "EMA of RSI" -> {
-                val r =
-                    rsi(x, n1)
-                        .map { it ?: 0.0 }
+                val n =
+                    intParam(0)
+                        ?: return null
 
                 ema(
-                    r,
-                    p.getOrElse(1) { 9.0 }
-                        .toInt()
-                        .coerceAtLeast(1)
+                    x,
+                    n
                 ).lastOrNull { it != null }
             }
 
-            "MACD" ->
+            "HMA" -> {
+
+                val n =
+                    intParam(0)
+                        ?: return null
+
+                hma(
+                    x,
+                    n
+                ).lastOrNull { it != null }
+            }
+
+            "RSI" -> {
+
+                val n =
+                    intParam(0)
+                        ?: return null
+
+                rsi(
+                    x,
+                    n
+                ).lastOrNull { it != null }
+            }
+
+            "EMA of RSI" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                val r =
+                    rsi(
+                        x,
+                        rsiLength
+                    )
+
+                emaNullable(
+                    r,
+                    smoothingLength
+                ).lastOrNull { it != null }
+            }
+
+            "MACD" -> {
+
+                val fast =
+                    intParam(0)
+                        ?: return null
+
+                val slow =
+                    intParam(1)
+                        ?: return null
+
+                val signal =
+                    intParam(2)
+                        ?: return null
+
                 macd(
                     x,
-                    p.getOrElse(0) { 12.0 }.toInt(),
-                    p.getOrElse(1) { 26.0 }.toInt(),
-                    p.getOrElse(2) { 9.0 }.toInt()
+                    fast,
+                    slow,
+                    signal
                 ).first.lastOrNull { it != null }
+            }
 
-            "MACD Signal" ->
+            "MACD Signal" -> {
+
+                val fast =
+                    intParam(0)
+                        ?: return null
+
+                val slow =
+                    intParam(1)
+                        ?: return null
+
+                val signal =
+                    intParam(2)
+                        ?: return null
+
                 macd(
                     x,
-                    p.getOrElse(0) { 12.0 }.toInt(),
-                    p.getOrElse(1) { 26.0 }.toInt(),
-                    p.getOrElse(2) { 9.0 }.toInt()
+                    fast,
+                    slow,
+                    signal
                 ).second.lastOrNull { it != null }
+            }
 
-            "MACD Histogram" ->
+            "MACD Histogram" -> {
+
+                val fast =
+                    intParam(0)
+                        ?: return null
+
+                val slow =
+                    intParam(1)
+                        ?: return null
+
+                val signal =
+                    intParam(2)
+                        ?: return null
+
                 macd(
                     x,
-                    p.getOrElse(0) { 12.0 }.toInt(),
-                    p.getOrElse(1) { 26.0 }.toInt(),
-                    p.getOrElse(2) { 9.0 }.toInt()
+                    fast,
+                    slow,
+                    signal
                 ).third.lastOrNull { it != null }
+            }
 
+            /*
+             * Stoch RSI raw value
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             */
+            "Stoch RSI" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                val r =
+                    rsi(
+                        x,
+                        rsiLength
+                    )
+
+                stochRawFromRsi(
+                    r,
+                    stochLength
+                ).lastOrNull { it != null }
+            }
+
+            /*
+             * Stoch RSI %K
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             * p[2] = K Length
+             */
             "Stoch RSI %K" -> {
-                val r = rsi(x, n1)
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                val kLength =
+                    intParam(2)
+                        ?: return null
+
+                val r =
+                    rsi(
+                        x,
+                        rsiLength
+                    )
 
                 val raw =
                     stochRawFromRsi(
                         r,
-                        p.getOrElse(1) { 14.0 }.toInt()
+                        stochLength
                     )
 
                 stochK(
                     raw,
-                    p.getOrElse(2) { 3.0 }.toInt()
+                    kLength
                 ).lastOrNull { it != null }
             }
 
+            /*
+             * Stoch RSI %D
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             * p[2] = K Length
+             * p[3] = D Length
+             */
             "Stoch RSI %D" -> {
-                val r = rsi(x, n1)
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                val kLength =
+                    intParam(2)
+                        ?: return null
+
+                val dLength =
+                    intParam(3)
+                        ?: return null
+
+                val r =
+                    rsi(
+                        x,
+                        rsiLength
+                    )
 
                 val raw =
                     stochRawFromRsi(
                         r,
-                        p.getOrElse(1) { 14.0 }.toInt()
+                        stochLength
                     )
 
                 val k =
                     stochK(
                         raw,
-                        p.getOrElse(2) { 3.0 }.toInt()
+                        kLength
                     )
 
                 stochD(
                     k,
-                    p.getOrElse(3) { 3.0 }.toInt()
+                    dLength
                 ).lastOrNull { it != null }
             }
 
@@ -571,59 +1240,231 @@ object Indicators {
                 p.firstOrNull()
 
             /*
-             * Reverse RSI parameters:
+             * Reverse RSI
+             *
              * p[0] = RSI Length
              * p[1] = Smoothing Length
-             * p[2] = RSI Target Level
+             * p[2] = Level
+             *
+             * Price output.
              */
-            "Reverse RSI" ->
+            "Reverse RSI" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                val level =
+                    levelParam(2)
+                        ?: return null
+
                 reverseRsiPrice(
-                    series = x,
-                    target = p.getOrElse(2) { 50.0 },
-                    rsiLength = n1,
-                    smoothingLength = p.getOrElse(1) { 1.0 }
-                        .toInt()
-                        .coerceAtLeast(1)
-                )
-
-            "Reverse Stoch RSI" ->
-                reverseStoch(
                     x,
-                    p.getOrElse(2) { 50.0 },
-                    n1,
-                    p.getOrElse(1) { 14.0 }
-                        .toInt()
-                        .coerceAtLeast(1)
+                    level,
+                    rsiLength,
+                    smoothingLength
                 )
+            }
 
-            "Reverse Stoch RSI %K" ->
-                reverseStochK(
-                    x,
-                    p.getOrElse(3) { 50.0 },
-                    n1,
-                    p.getOrElse(1) { 14.0 }
-                        .toInt()
-                        .coerceAtLeast(1),
-                    p.getOrElse(2) { 3.0 }
-                        .toInt()
-                        .coerceAtLeast(1)
-                )
+            /*
+             * Fixed Reverse RSI levels.
+             *
+             * p[0] = RSI Length
+             * p[1] = Smoothing Length
+             */
+            "Reverse RSI Level 40" -> {
 
-            "Reverse Stoch RSI %D" ->
-                reverseStochD(
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseRsiPrice(
                     x,
-                    p.getOrElse(4) { 50.0 },
-                    n1,
-                    p.getOrElse(1) { 14.0 }
-                        .toInt()
-                        .coerceAtLeast(1),
-                    p.getOrElse(2) { 3.0 }
-                        .toInt()
-                        .coerceAtLeast(1),
-                    p.getOrElse(3) { 3.0 }
-                        .toInt()
-                        .coerceAtLeast(1)
+                    40.0,
+                    rsiLength,
+                    smoothingLength
                 )
+            }
+
+            "Reverse RSI Level 50" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseRsiPrice(
+                    x,
+                    50.0,
+                    rsiLength,
+                    smoothingLength
+                )
+            }
+
+            "Reverse RSI Level 60" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseRsiPrice(
+                    x,
+                    60.0,
+                    rsiLength,
+                    smoothingLength
+                )
+            }
+
+            /*
+             * Reverse Stoch RSI fixed levels.
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             */
+            "Reverse Stoch RSI Level 20" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseStochRawPrice(
+                    x,
+                    20.0,
+                    rsiLength,
+                    stochLength
+                )
+            }
+
+            "Reverse Stoch RSI Level 50" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseStochRawPrice(
+                    x,
+                    50.0,
+                    rsiLength,
+                    stochLength
+                )
+            }
+
+            "Reverse Stoch RSI Level 80" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                reverseStochRawPrice(
+                    x,
+                    80.0,
+                    rsiLength,
+                    stochLength
+                )
+            }
+
+            /*
+             * Reverse Stoch RSI %K
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             * p[2] = K Length
+             * p[3] = Level
+             */
+            "Reverse Stoch RSI %K" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                val kLength =
+                    intParam(2)
+                        ?: return null
+
+                val level =
+                    levelParam(3)
+                        ?: return null
+
+                reverseStochKPrice(
+                    x,
+                    level,
+                    rsiLength,
+                    stochLength,
+                    kLength
+                )
+            }
+
+            /*
+             * Reverse Stoch RSI %D
+             *
+             * p[0] = RSI Length
+             * p[1] = Stoch Length
+             * p[2] = K Length
+             * p[3] = D Length
+             * p[4] = Level
+             */
+            "Reverse Stoch RSI %D" -> {
+
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val stochLength =
+                    intParam(1)
+                        ?: return null
+
+                val kLength =
+                    intParam(2)
+                        ?: return null
+
+                val dLength =
+                    intParam(3)
+                        ?: return null
+
+                val level =
+                    levelParam(4)
+                        ?: return null
+
+                reverseStochDPrice(
+                    x,
+                    level,
+                    rsiLength,
+                    stochLength,
+                    kLength,
+                    dLength
+                )
+            }
 
             else ->
                 null
