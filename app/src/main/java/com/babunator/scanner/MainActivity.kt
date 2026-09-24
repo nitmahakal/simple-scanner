@@ -395,9 +395,18 @@ class MainActivity : AppCompatActivity() {
         root.addView(label("Condition logic"))
         root.addView(logic, lp())
 
-        repeat(3) {
-            addConditionRow(root, it)
-        }
+        addConditionRow(root, 0)
+
+        root.addView(
+            Button(this).apply {
+                text = "+ ADD MORE CONDITION"
+        
+                setOnClickListener {
+                    addConditionRow(root, rows.size)
+                }
+            },
+            lp()
+        )
 
         root.addView(
             Button(this).apply {
