@@ -818,16 +818,28 @@ class MainActivity : AppCompatActivity() {
                 "HMA" -> 1
                 "RSI" -> 1
                 "EMA of RSI" -> 2
+        
                 "MACD" -> 3
                 "MACD Signal" -> 3
                 "MACD Histogram" -> 3
+        
+                "Stoch RSI" -> 2
                 "Stoch RSI %K" -> 3
                 "Stoch RSI %D" -> 4
-                "Reverse RSI" -> 3
-                "Reverse Stoch RSI" -> 3
+        
+                "Numeric Value" -> 1
+        
+                "Reverse RSI Level 40" -> 2
+                "Reverse RSI Level 50" -> 2
+                "Reverse RSI Level 60" -> 2
+        
+                "Reverse Stoch RSI Level 20" -> 2
+                "Reverse Stoch RSI Level 50" -> 2
+                "Reverse Stoch RSI Level 80" -> 2
+        
                 "Reverse Stoch RSI %K" -> 4
                 "Reverse Stoch RSI %D" -> 5
-                "Numeric Value" -> 1
+        
                 else -> 0
             }
         }
