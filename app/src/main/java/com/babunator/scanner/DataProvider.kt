@@ -62,7 +62,7 @@ class DataProvider {
                     "?range=max" +
                     "&interval=1d&events=div%2Csplits"
 
-        return parseDaily(symbol, get(url))
+        return parseDaily(symbol, get(url), allowEmpty = false)
     }
 
     fun fetchDailySince(symbol: String, fromDate: LocalDate): List<Candle> {
@@ -86,10 +86,15 @@ class DataProvider {
                     "&period2=$period2" +
                     "&interval=1d&events=div%2Csplits"
 
-        return parseDaily(symbol, get(url))
+        return parseDaily(symbol, get(url), allowEmpty = true)
     }
 
-    private fun parseDaily(symbol: String, text: String): List<Candle> {
+    private fun parseDaily(
+        symbol: String,
+        text: String,
+        allowEmpty: Boolean
+    ): List<Candle> {
+
         val root = JSONObject(text)
 
         val chart = root.getJSONObject("chart")
@@ -105,27 +110,41 @@ class DataProvider {
             ?: throw IllegalStateException("No chart result for $symbol")
 
         if (resultArray.length() == 0 || resultArray.isNull(0)) {
+            if (allowEmpty) return emptyList()
             throw IllegalStateException("Empty chart result for $symbol")
         }
 
         val result = resultArray.getJSONObject(0)
 
         val ts = result.optJSONArray("timestamp")
-            ?: throw IllegalStateException("No timestamps for $symbol")
+            ?: if (allowEmpty) {
+                return emptyList()
+            } else {
+                throw IllegalStateException("No timestamps for $symbol")
+            }
 
         val quote = result
             .getJSONObject("indicators")
             .optJSONArray("quote")
-            ?: throw IllegalStateException("No quote data for $symbol")
+            ?: if (allowEmpty) {
+                return emptyList()
+            } else {
+                throw IllegalStateException("No quote data for $symbol")
+            }
 
         if (quote.length() == 0 || quote.isNull(0)) {
+            if (allowEmpty) return emptyList()
             throw IllegalStateException("Empty quote data for $symbol")
         }
 
         val close = quote
             .getJSONObject(0)
             .optJSONArray("close")
-            ?: throw IllegalStateException("No close data for $symbol")
+            ?: if (allowEmpty) {
+                return emptyList()
+            } else {
+                throw IllegalStateException("No close data for $symbol")
+            }
 
         val out = mutableListOf<Candle>()
 
@@ -144,7 +163,7 @@ class DataProvider {
             )
         }
 
-        if (out.isEmpty()) {
+        if (out.isEmpty() && !allowEmpty) {
             throw IllegalStateException("No valid price data for $symbol")
         }
 
