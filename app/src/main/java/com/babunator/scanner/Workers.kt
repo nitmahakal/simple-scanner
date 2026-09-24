@@ -176,8 +176,14 @@ class UpdateWorker(
                             .putInt("limit", limit)
                             .build()
                     )
-                    .build()
-
+                    .setConstraints(
+                        androidx.work.Constraints.Builder()
+                            .setRequiredNetworkType(
+                                androidx.work.NetworkType.CONNECTED
+                            )
+                            .build()
+                    )
+                    .build()               
                 WorkManager.getInstance(applicationContext)
                     .enqueueUniqueWork(
                         "nse_data_update",
