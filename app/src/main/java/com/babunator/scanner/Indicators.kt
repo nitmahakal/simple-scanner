@@ -1082,7 +1082,7 @@ object Indicators {
                 ).lastOrNull { it != null }
             }
 
-            "EMA of RSI" -> {
+                        "EMA of RSI" -> {
 
                 val rsiLength =
                     intParam(0)
@@ -1104,8 +1104,29 @@ object Indicators {
                 ).lastOrNull { it != null }
             }
 
-            "MACD" -> {
+            "SMA of RSI" -> {
 
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smoothingLength =
+                    intParam(1)
+                        ?: return null
+
+                val r =
+                    rsi(
+                        x,
+                        rsiLength
+                    )
+
+                smaNullable(
+                    r,
+                    smoothingLength
+                ).lastOrNull { it != null }
+            }
+
+            "MACD" -> {
                 val fast =
                     intParam(0)
                         ?: return null
