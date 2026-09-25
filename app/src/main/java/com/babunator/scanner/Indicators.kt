@@ -681,6 +681,78 @@ object Indicators {
             rsiLength
         )
     }
+        /*
+     * Reverse SMA of RSI.
+     *
+     * Finds the price required for the current
+     * SMA of RSI to equal the supplied target.
+     *
+     * p[0] = RSI Length
+     * p[1] = SMA Length
+     *
+     * The target is the current SMA of RSI
+     * value supplied by the caller.
+     */
+    fun reverseSmaRsiPrice(
+        series: List<Double>,
+        target: Double,
+        rsiLength: Int,
+        smaLength: Int
+    ): Double? {
+
+        if (
+            rsiLength <= 0 ||
+            smaLength <= 0 ||
+            target !in 0.0..100.0
+        ) {
+            return null
+        }
+
+        if (
+            series.size <
+            rsiLength +
+            smaLength +
+            2
+        ) {
+            return null
+        }
+
+        val r =
+            rsi(
+                series,
+                rsiLength
+            )
+
+        val previous =
+            r.dropLast(1)
+                .takeLast(
+                    smaLength - 1
+                )
+                .filterNotNull()
+
+        if (
+            previous.size !=
+            smaLength - 1
+        ) {
+            return null
+        }
+
+        val requiredCurrentRsi =
+            target * smaLength -
+                    previous.sum()
+
+        if (
+            requiredCurrentRsi !in 0.0..100.0
+        ) {
+            return null
+        }
+
+        return reverseRsiRawPrice(
+            series,
+            requiredCurrentRsi,
+            rsiLength
+        )
+    }
 
     /*
      * Price required to make the current RSI
