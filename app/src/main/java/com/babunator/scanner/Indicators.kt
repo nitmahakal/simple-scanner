@@ -187,49 +187,100 @@ object Indicators {
             return out
         }
 
-        val gains =
-            MutableList(x.size) { 0.0 }
+        var gainSum = 0.0
+        var lossSum = 0.0
 
-        val losses =
-            MutableList(x.size) { 0.0 }
-
-        for (i in 1 until x.size) {
+        /*
+         * Wilder RSI initialization:
+         *
+         * The first average gain/loss uses the
+         * first n actual price changes:
+         *
+         * change[1] ... change[n]
+         *
+         * The first RSI is therefore available
+         * at index n.
+         */
+        for (i in 1..n) {
 
             val change =
                 x[i] - x[i - 1]
 
             if (change >= 0.0) {
-                gains[i] = change
+                gainSum += change
             } else {
-                losses[i] = -change
+                lossSum -= change
             }
         }
 
-        val avgGain =
-            rma(gains, n)
+        var avgGain =
+            gainSum / n.toDouble()
 
-        val avgLoss =
-            rma(losses, n)
+        var avgLoss =
+            lossSum / n.toDouble()
 
-        for (i in x.indices) {
+        out[n] =
+            when {
+                avgLoss == 0.0 && avgGain == 0.0 ->
+                    0.0
 
-            val gain = avgGain[i]
-            val loss = avgLoss[i]
+                avgLoss == 0.0 ->
+                    100.0
 
-            if (gain == null || loss == null) {
-                continue
+                else -> {
+                    val rs =
+                        avgGain / avgLoss
+
+                    100.0 -
+                            100.0 / (1.0 + rs)
+                }
             }
+
+        /*
+         * Wilder recursive update.
+         */
+        for (i in n + 1 until x.size) {
+
+            val change =
+                x[i] - x[i - 1]
+
+            val gain =
+                if (change > 0.0) {
+                    change
+                } else {
+                    0.0
+                }
+
+            val loss =
+                if (change < 0.0) {
+                    -change
+                } else {
+                    0.0
+                }
+
+            avgGain =
+                (
+                    avgGain * (n - 1) +
+                            gain
+                    ) / n.toDouble()
+
+            avgLoss =
+                (
+                    avgLoss * (n - 1) +
+                            loss
+                    ) / n.toDouble()
 
             out[i] =
                 when {
-                    loss == 0.0 && gain == 0.0 ->
+                    avgLoss == 0.0 && avgGain == 0.0 ->
                         0.0
 
-                    loss == 0.0 ->
+                    avgLoss == 0.0 ->
                         100.0
 
                     else -> {
-                        val rs = gain / loss
+                        val rs =
+                            avgGain / avgLoss
 
                         100.0 -
                                 100.0 / (1.0 + rs)
@@ -238,7 +289,7 @@ object Indicators {
         }
 
         return out
-    }
+    }    
 
     /*
      * Weighted Moving Average
