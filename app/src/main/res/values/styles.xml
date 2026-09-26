@@ -1,7 +1,17 @@
 <resources>
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#1565C0</item>
-        <item name="android:navigationBarColor">#000000</item>
+
+        <!-- Theme-aware background and text -->
+        <item name="android:windowBackground">#F4F6F5</item>
+        <item name="android:colorBackground">#F4F6F5</item>
+        <item name="android:textColorPrimary">#18201B</item>
+        <item name="android:textColorSecondary">#526057</item>
+
+        <!-- Subtle green accent -->
+        <item name="android:colorAccent">#2E7D4F</item>
+
+        <!-- Dark theme -->
+        <item name="android:navigationBarColor">#101512</item>
     </style>
 </resources>
