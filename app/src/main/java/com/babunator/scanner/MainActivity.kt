@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity() {
             "HMA",
             "RSI",
             "EMA of RSI",
+            "SMA of RSI",
             "MACD",
             "MACD Signal",
             "MACD Histogram",
@@ -36,14 +37,18 @@ class MainActivity : AppCompatActivity() {
             "Stoch RSI %K",
             "Stoch RSI %D",
             "Numeric Value",
-            "Reverse RSI Level 40",
-            "Reverse RSI Level 50",
-            "Reverse RSI Level 60",
-            "Reverse Stoch RSI Level 20",
-            "Reverse Stoch RSI Level 50",
-            "Reverse Stoch RSI Level 80",
+        
+            "Reverse RSI",
+            "Reverse SMA of RSI",
+            "Reverse RSI Level",
+        
+            "Reverse Stoch RSI Level",
             "Reverse Stoch RSI %K",
-            "Reverse Stoch RSI %D"
+            "Reverse Stoch RSI %D",
+        
+            "Reverse MACD",
+            "Reverse MACD Signal",
+            "Reverse MACD Zero Line"
         )
         
         private val comparators = listOf(
@@ -1036,95 +1041,123 @@ private fun showUpdateScreen() {
             .show()
     }
 
-    private fun validateConditions(
-        conditions: List<Condition>
-    ): String? {
-    
-        fun requiredParams(indicator: String): Int {
-            return when (indicator) {
-                "Close" -> 0
-                "EMA" -> 1
-                "HMA" -> 1
-                "RSI" -> 1
-                "EMA of RSI" -> 2
-        
-                "MACD" -> 3
-                "MACD Signal" -> 3
-                "MACD Histogram" -> 3
-        
-                "Stoch RSI" -> 2
-                "Stoch RSI %K" -> 3
-                "Stoch RSI %D" -> 4
-        
-                "Numeric Value" -> 1
-        
-                "Reverse RSI Level 40" -> 2
-                "Reverse RSI Level 50" -> 2
-                "Reverse RSI Level 60" -> 2
-        
-                "Reverse Stoch RSI Level 20" -> 2
-                "Reverse Stoch RSI Level 50" -> 2
-                "Reverse Stoch RSI Level 80" -> 2
-        
-                "Reverse Stoch RSI %K" -> 4
-                "Reverse Stoch RSI %D" -> 5
-        
-                else -> 0
-            }
+private fun validateConditions(
+    conditions: List<Condition>
+): String? {
+
+    fun requiredParams(indicator: String): Int {
+        return when (indicator) {
+
+            "Close" -> 0
+
+            "EMA" -> 1
+            "HMA" -> 1
+            "RSI" -> 1
+
+            "EMA of RSI" -> 2
+            "SMA of RSI" -> 2
+
+            "MACD" -> 3
+            "MACD Signal" -> 3
+            "MACD Histogram" -> 3
+
+            "Stoch RSI" -> 2
+            "Stoch RSI %K" -> 3
+            "Stoch RSI %D" -> 4
+
+            "Numeric Value" -> 1
+
+            "Reverse RSI" -> 2
+            "Reverse SMA of RSI" -> 2
+            "Reverse RSI Level" -> 3
+
+            "Reverse Stoch RSI Level" -> 4
+            "Reverse Stoch RSI %K" -> 3
+            "Reverse Stoch RSI %D" -> 4
+
+            "Reverse MACD" -> 4
+            "Reverse MACD Signal" -> 4
+            "Reverse MACD Zero Line" -> 4
+
+            else -> 0
         }
-    
-        fun validParams(
-            indicator: String,
-            params: List<Double>
-        ): Boolean {
-            val required = requiredParams(indicator)
-    
-            if (params.size != required) {
-                return false
-            }
-    
-            return params.all {
-                it.isFinite() && it > 0.0
-            }
+    }
+
+    fun validParams(
+        indicator: String,
+        params: List<Double>
+    ): Boolean {
+
+        val required =
+            requiredParams(indicator)
+
+        if (params.size != required) {
+            return false
         }
-    
-        for ((index, c) in conditions.withIndex()) {
-    
-            val number = index + 1
-    
-            if (!validParams(c.leftIndicator, c.leftParams)) {
+
+        return params.all {
+            it.isFinite() &&
+                    it > 0.0
+        }
+    }
+
+    for ((index, c) in conditions.withIndex()) {
+
+        val number =
+            index + 1
+
+        if (
+            !validParams(
+                c.leftIndicator,
+                c.leftParams
+            )
+        ) {
+            return "Condition $number:\n" +
+                    "${c.leftIndicator} requires " +
+                    "${requiredParams(c.leftIndicator)} " +
+                    "valid parameter(s)."
+        }
+
+        if (c.rightIndicator == "Number") {
+
+            if (!c.rightTarget.isFinite()) {
                 return "Condition $number:\n" +
-                        "${c.leftIndicator} requires " +
-                        "${requiredParams(c.leftIndicator)} " +
+                        "Number target is invalid."
+            }
+
+        } else {
+
+            if (
+                !validParams(
+                    c.rightIndicator,
+                    c.rightParams
+                )
+            ) {
+                return "Condition $number:\n" +
+                        "${c.rightIndicator} requires " +
+                        "${requiredParams(c.rightIndicator)} " +
                         "valid parameter(s)."
             }
-    
-            if (c.rightIndicator == "Number") {
-                if (!c.rightTarget.isFinite()) {
-                    return "Condition $number:\nNumber target is invalid."
-                }
-            } else {
-                if (!validParams(c.rightIndicator, c.rightParams)) {
-                    return "Condition $number:\n" +
-                            "${c.rightIndicator} requires " +
-                            "${requiredParams(c.rightIndicator)} " +
-                            "valid parameter(s)."
-                }
-            }
-    
+        }
+
+        if (
+            c.comparator == "Near By" ||
+            c.comparator == "May Go To Cross Above" ||
+            c.comparator == "May Go To Cross Below"
+        ) {
+
             if (
-                c.comparator == "Near By" ||
-                c.comparator == "May Go To Cross Above" ||
-                c.comparator == "May Go To Cross Below"
+                !c.rangePct.isFinite() ||
+                c.rangePct <= 0.0
             ) {
-                if (!c.rangePct.isFinite() || c.rangePct <= 0.0) {
-                    return "Condition $number:\nRange % must be greater than 0."
-                }
+                return "Condition $number:\n" +
+                        "Range % must be greater than 0."
             }
         }
-    
-        return null
     }
+
+    return null
+}
     private fun verticalScroll(): ViewGroup {
         val scroll = android.widget.ScrollView(this)
     
