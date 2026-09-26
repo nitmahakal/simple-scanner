@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var content: FrameLayout
     private lateinit var status: TextView
     private var updateMonitorJob: Job? = null
-
+    private var scanMonitorJob: Job? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
@@ -257,9 +257,9 @@ private fun styleButton(button: Button) {
     // ---------------------------------------------------------
     // SCREEN 1 : UPDATE DATA
     // ---------------------------------------------------------
-
 private fun showUpdateScreen() {
     updateMonitorJob?.cancel()
+    scanMonitorJob?.cancel()
     content.removeAllViews()
 
     val root = verticalScroll()
@@ -653,6 +653,7 @@ private fun showUpdateScreen() {
 
 private fun showScannerScreen() {
     updateMonitorJob?.cancel()
+    scanMonitorJob?.cancel()
     content.removeAllViews()
     rows.clear()
 
@@ -1417,7 +1418,7 @@ private fun showScannerScreen() {
         lp()
     )
 
-    updateMonitorJob =
+    scanMonitorJob =
         lifecycleScope.launch {
 
             while (isActive) {
@@ -1740,8 +1741,8 @@ private fun formatInputNumber(
 
     private fun showSavedScreen() {
         updateMonitorJob?.cancel()
-        content.removeAllViews()
-
+        scanMonitorJob?.cancel()
+        
         val root = verticalScroll()
 
         root.addView(title("Saved Scans & Tracking"))
