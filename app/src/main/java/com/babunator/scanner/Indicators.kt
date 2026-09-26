@@ -916,9 +916,7 @@ object Indicators {
             smaNullable(
                 r,
                 smoothingLength
-            ).lastOrNull {
-                it != null
-            }
+            ).lastOrNull()
                 ?: return null
     
         if (smoothingLength == 1) {
