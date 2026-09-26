@@ -52,7 +52,7 @@ class UpdateWorker(
 
             for (s in part) {
 
-                val history = db.getHistory(s, 60)
+                val history = db.getHistory(s)
                 val historyInitialized = db.isHistoryInitialized(s)
 
                 var updated = false
