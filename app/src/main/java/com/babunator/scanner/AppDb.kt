@@ -84,7 +84,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
             }
         }
 
-        return out.asReversed()
+        return out
     }
 
     fun symbols(): List<String> {
