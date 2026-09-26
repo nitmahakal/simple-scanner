@@ -1841,9 +1841,7 @@ object Indicators {
                 ema(
                     x,
                     n
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "HMA" -> {
