@@ -1181,6 +1181,10 @@ object Indicators {
         if (
             highest == lowest
         ) {
+            if (level != 0.0) {
+                return null
+            }
+
             return reverseRsiRawPrice(
                 series,
                 lowest,
