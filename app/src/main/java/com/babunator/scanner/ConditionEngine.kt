@@ -61,45 +61,27 @@ object ConditionEngine {
     /*
      * Evaluate one complete scanner condition.
      *
-     * For Cross Above / Cross Below we compare:
+     * Current indicator values are supplied by ScannerEngine,
+     * so normal comparisons do not calculate the same indicators
+     * a second time.
      *
-     * previous candle:
-     *     left vs right
-     *
-     * current candle:
-     *     left vs right
-     *
-     * A Number on the right side is treated as
-     * a constant value across both candles.
+     * For Cross Above / Cross Below, only the previous candle
+     * values need to be calculated here.
      */
     fun evaluate(
         series: List<Double>,
-        c: Condition
+        c: Condition,
+        currentLeft: Double?,
+        currentRight: Double?
     ): Boolean {
 
         if (series.isEmpty()) {
             return false
         }
 
-        val currentLeft =
-            Indicators.valueAt(
-                series,
-                c.leftIndicator,
-                c.leftParams
-            )
-                ?: return false
-
-        val currentRight =
-            if (c.rightIndicator == "Number") {
-                c.rightTarget
-            } else {
-                Indicators.valueAt(
-                    series,
-                    c.rightIndicator,
-                    c.rightParams
-                )
-                    ?: return false
-            }
+        if (currentLeft == null || currentRight == null) {
+            return false
+        }
 
         if (
             currentLeft.isNaN() ||
