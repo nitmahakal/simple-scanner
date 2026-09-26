@@ -1272,8 +1272,8 @@ object Indicators {
                     previous.sum()
 
         if (
-            requiredRaw <= 0.0 ||
-            requiredRaw >= 100.0
+            requiredRaw < 0.0 ||
+            requiredRaw > 100.0
         ) {
             return null
         }
@@ -1358,8 +1358,8 @@ object Indicators {
                     previous.sum()
 
         if (
-            requiredK <= 0.0 ||
-            requiredK >= 100.0
+            requiredK < 0.0 ||
+            requiredK > 100.0
         ) {
             return null
         }
@@ -1420,8 +1420,8 @@ object Indicators {
     ): Double? {
 
         if (
-            level <= 0.0 ||
-            level >= 100.0 ||
+            level < 0.0 ||
+            level > 100.0 ||
             rsiLength <= 0 ||
             stochLength <= 0 ||
             smoothingLength <= 0
@@ -1471,8 +1471,8 @@ object Indicators {
                     previous.sum()
 
         if (
-            requiredRaw <= 0.0 ||
-            requiredRaw >= 100.0
+            requiredRaw < 0.0 ||
+            requiredRaw > 100.0
         ) {
             return null
         }
