@@ -38,11 +38,10 @@ class ScannerEngine(private val db: AppDb) {
                 db.getHistory(s),
                 cfg.timeframe
             )
-
-            if (rows.size < 60) continue
-
+            
+            if (rows.isEmpty()) continue
+            
             val close = rows.map { it.close }
-
             val checks = mutableListOf<Boolean>()
             val conditionDetails = mutableListOf<String>()
             val indicatorValues = linkedMapOf<String, String>()
