@@ -1967,7 +1967,11 @@ private fun validateConditions(
 
         return params.all {
             it.isFinite() &&
-                    it > 0.0
+                    if (indicator == "Numeric Value") {
+                        true
+                    } else {
+                        it > 0.0
+                    }
         }
     }
 
