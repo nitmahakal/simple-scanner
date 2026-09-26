@@ -610,75 +610,71 @@ object Indicators {
     }
 
     /*
-     * Reverse RSI price calculation.
-     *
-     * This is a price-inversion utility, not a
-     * TradingView built-in indicator.
+     * Reverse RSI
      *
      * p[0] = RSI Length
      * p[1] = Smoothing Length
-     * p[2] = Level
      *
-     * The smoothing is an SMA of RSI values.
+     * No target level.
+     * Returns the price corresponding to
+     * the current smoothed RSI value.
      */
-    fun reverseRsiPrice(
-        series: List<Double>,
-        level: Double,
-        rsiLength: Int,
-        smoothingLength: Int
-    ): Double? {
+    "Reverse RSI" -> {
 
-        if (
-            rsiLength <= 0 ||
-            smoothingLength <= 0 ||
-            level !in 0.0..100.0
-        ) {
-            return null
-        }
+        val rsiLength =
+            intParam(0)
+                ?: return null
 
-        if (
-            series.size <
-            rsiLength +
-            smoothingLength +
-            2
-        ) {
-            return null
-        }
+        val smoothingLength =
+            intParam(1)
+                ?: return null
 
         val r =
             rsi(
-                series,
+                x,
                 rsiLength
             )
 
-        val previous =
-            r.dropLast(1)
-                .takeLast(
-                    smoothingLength - 1
-                )
-                .filterNotNull()
+        val currentRsi =
+            smaNullable(
+                r,
+                smoothingLength
+            ).lastOrNull { it != null }
+                ?: return null
 
-        if (
-            previous.size !=
-            smoothingLength - 1
-        ) {
-            return null
-        }
-
-        val requiredCurrentRsi =
-            level * smoothingLength -
-                    previous.sum()
-
-        if (
-            requiredCurrentRsi !in 0.0..100.0
-        ) {
-            return null
-        }
-
-        return reverseRsiRawPrice(
-            series,
-            requiredCurrentRsi,
+        reverseRsiRawPrice(
+            x,
+            currentRsi,
             rsiLength
+        )
+    }
+
+    /*
+     * Reverse RSI Level
+     *
+     * p[0] = RSI Length
+     * p[1] = Smoothing Length
+     * p[2] = Target Level
+     */
+    "Reverse RSI Level" -> {
+
+        val rsiLength =
+            intParam(0)
+                ?: return null
+
+        val smoothingLength =
+            intParam(1)
+                ?: return null
+
+        val level =
+            levelParam(2)
+                ?: return null
+
+        reverseRsiPrice(
+            x,
+            level,
+            rsiLength,
+            smoothingLength
         )
     }
         /*
