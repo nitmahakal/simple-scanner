@@ -1197,7 +1197,36 @@ object Indicators {
                     smoothingLength
                 ).lastOrNull { it != null }
             }
+             /*
+             * Reverse SMA of RSI
+             *
+             * p[0] = RSI Length
+             * p[1] = SMA Length
+             * p[2] = Target SMA level
+             */
+            "Reverse SMA of RSI" -> {
 
+                val rsiLength =
+                    intParam(0)
+                        ?: return null
+
+                val smaLength =
+                    intParam(1)
+                        ?: return null
+
+                val target =
+                    levelParam(2)
+                        ?: return null
+
+                reverseSmaRsiPrice(
+                    x,
+                    target,
+                    rsiLength,
+                    smaLength
+                )
+            }
+
+            
             "MACD" -> {
                 val fast =
                     intParam(0)
