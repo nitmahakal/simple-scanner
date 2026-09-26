@@ -5,16 +5,20 @@ import java.util.Locale
 class ScannerEngine(private val db: AppDb) {
 
     fun resample(rows: List<Candle>, timeframe: String): List<Candle> {
-        if (timeframe == "Daily") return rows
+        if (rows.isEmpty() || timeframe == "Daily") {
+            return rows
+        }
 
         val groups = linkedMapOf<String, Candle>()
 
-        for (r in rows) {
+        for (r in rows.sortedBy { it.date }) {
             val d = java.time.LocalDate.parse(r.date)
 
             val key =
                 if (timeframe == "Weekly") {
-                    d.minusDays((d.dayOfWeek.value - 1).toLong()).toString()
+                    d.minusDays(
+                        (d.dayOfWeek.value - 1).toLong()
+                    ).toString()
                 } else {
                     d.withDayOfMonth(1).toString()
                 }
@@ -38,18 +42,40 @@ class ScannerEngine(private val db: AppDb) {
                 db.getHistory(s),
                 cfg.timeframe
             )
-            
+
             if (rows.isEmpty()) continue
-            
+
             val close = rows.map { it.close }
+
             val checks = mutableListOf<Boolean>()
             val conditionDetails = mutableListOf<String>()
             val indicatorValues = linkedMapOf<String, String>()
 
+            val currentValueCache =
+                mutableMapOf<String, Double?>()
+
+            fun cachedValue(
+                indicator: String,
+                params: List<Double>
+            ): Double? {
+
+                val key =
+                    indicator +
+                            "|" +
+                            params.joinToString(",")
+
+                return currentValueCache.getOrPut(key) {
+                    ConditionEngineValue.value(
+                        close,
+                        indicator,
+                        params
+                    )
+                }
+            }
+
             for ((index, condition) in cfg.conditions.withIndex()) {
 
-                val leftValue = ConditionEngineValue.value(
-                    close,
+                val leftValue = cachedValue(
                     condition.leftIndicator,
                     condition.leftParams
                 )
@@ -58,8 +84,7 @@ class ScannerEngine(private val db: AppDb) {
                     if (condition.rightIndicator == "Number") {
                         condition.rightTarget
                     } else {
-                        ConditionEngineValue.value(
-                            close,
+                        cachedValue(
                             condition.rightIndicator,
                             condition.rightParams
                         )
@@ -71,23 +96,6 @@ class ScannerEngine(private val db: AppDb) {
                 )
 
                 checks += check
-
-                val leftText = formatConditionValue(
-                    condition.leftIndicator,
-                    condition.leftParams,
-                    leftValue
-                )
-
-                val rightText =
-                    if (condition.rightIndicator == "Number") {
-                        formatNumber(condition.rightTarget)
-                    } else {
-                        formatConditionValue(
-                            condition.rightIndicator,
-                            condition.rightParams,
-                            rightValue
-                        )
-                    }
 
                 conditionDetails +=
                     "Condition ${index + 1}: " +
@@ -109,11 +117,6 @@ class ScannerEngine(private val db: AppDb) {
                         "${condition.rightIndicator}${formatParams(condition.rightParams)}"
                     ] = formatNumber(rightValue)
                 }
-
-                // Keep these values available in the result note.
-                // The condition itself remains evaluated by ConditionEngine.
-                @Suppress("UNUSED_VARIABLE")
-                val unusedDisplayValues = leftText to rightText
             }
 
             val ok =
@@ -158,14 +161,6 @@ class ScannerEngine(private val db: AppDb) {
         }
 
         return hits
-    }
-
-    private fun formatConditionValue(
-        name: String,
-        params: List<Double>,
-        value: Double?
-    ): String {
-        return "$name${formatParams(params)}=${formatNumber(value)}"
     }
 
     private fun formatParams(params: List<Double>): String {
