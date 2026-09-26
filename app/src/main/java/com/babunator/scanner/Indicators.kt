@@ -1502,9 +1502,7 @@ object Indicators {
         return ema(
             series.dropLast(1),
             length
-        ).lastOrNull {
-            it != null
-        }
+        ).lastOrNull()
     }
 
     /*
@@ -1857,9 +1855,7 @@ object Indicators {
                 hma(
                     x,
                     n
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "RSI" -> {
@@ -1871,9 +1867,7 @@ object Indicators {
                 rsi(
                     x,
                     n
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "EMA of RSI" -> {
@@ -1895,9 +1889,7 @@ object Indicators {
                 emaNullable(
                     values,
                     smoothingLength
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "SMA of RSI" -> {
@@ -1919,9 +1911,7 @@ object Indicators {
                 smaNullable(
                     values,
                     smoothingLength
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "MACD" -> {
@@ -1943,9 +1933,7 @@ object Indicators {
                     fast,
                     slow,
                     signal
-                ).first.lastOrNull {
-                    it != null
-                }
+                ).first.lastOrNull()
             }
 
             "MACD Signal" -> {
@@ -1967,9 +1955,7 @@ object Indicators {
                     fast,
                     slow,
                     signal
-                ).second.lastOrNull {
-                    it != null
-                }
+                ).second.lastOrNull()
             }
 
             "MACD Histogram" -> {
@@ -1991,9 +1977,7 @@ object Indicators {
                     fast,
                     slow,
                     signal
-                ).third.lastOrNull {
-                    it != null
-                }
+                ).third.lastOrNull()
             }
 
             "Stoch RSI" -> {
@@ -2015,9 +1999,7 @@ object Indicators {
                 stochRawFromRsi(
                     values,
                     stochLength
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "Stoch RSI %K" -> {
@@ -2049,9 +2031,7 @@ object Indicators {
                 stochK(
                     raw,
                     kLength
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "Stoch RSI %D" -> {
@@ -2093,9 +2073,7 @@ object Indicators {
                 stochD(
                     k,
                     dLength
-                ).lastOrNull {
-                    it != null
-                }
+                ).lastOrNull()
             }
 
             "Numeric Value" ->
