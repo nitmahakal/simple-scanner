@@ -71,11 +71,11 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
         )
     }
 
-    fun getHistory(symbol: String, limit: Int = 400): List<Candle> {
+    fun getHistory(symbol: String): List<Candle> {
         val out = mutableListOf<Candle>()
         val c = readableDatabase.rawQuery(
-            "SELECT date,close FROM prices WHERE symbol=? ORDER BY date DESC LIMIT ?",
-            arrayOf(symbol, limit.toString())
+            "SELECT date,close FROM prices WHERE symbol=? ORDER BY date ASC",
+            arrayOf(symbol)
         )
 
         c.use {
