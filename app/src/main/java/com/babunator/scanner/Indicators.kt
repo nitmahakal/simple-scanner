@@ -1141,16 +1141,15 @@ object Indicators {
         rsiLength: Int,
         stochLength: Int
     ): Double? {
-
+    
         if (
-            level <= 0.0 ||
-            level >= 100.0 ||
+            level < 0.0 ||
+            level > 100.0 ||
             rsiLength <= 0 ||
             stochLength <= 0
         ) {
             return null
         }
-
         val r =
             rsi(
                 series,
