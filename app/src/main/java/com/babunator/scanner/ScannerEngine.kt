@@ -91,8 +91,10 @@ class ScannerEngine(private val db: AppDb) {
                     }
 
                 val check = ConditionEngine.evaluate(
-                    close,
-                    condition
+                    series = close,
+                    c = condition,
+                    currentLeft = leftValue,
+                    currentRight = rightValue
                 )
 
                 checks += check
