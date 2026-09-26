@@ -898,61 +898,78 @@ object Indicators {
         rsiLength: Int,
         smoothingLength: Int
     ): Double? {
-
+    
         if (
             rsiLength <= 0 ||
             smoothingLength <= 0
         ) {
             return null
         }
-
+    
         val r =
             rsi(
                 series,
                 rsiLength
             )
-
-        val current =
-            r.lastOrNull {
+    
+        val currentSmoothed =
+            smaNullable(
+                r,
+                smoothingLength
+            ).lastOrNull {
                 it != null
             }
                 ?: return null
-
+    
         if (smoothingLength == 1) {
             return reverseRsiRawPrice(
                 series,
-                current,
+                currentSmoothed,
                 rsiLength
             )
         }
-
+    
         val previous =
             r.dropLast(1)
                 .takeLast(
                     smoothingLength - 1
                 )
                 .filterNotNull()
-
+    
         if (
             previous.size !=
             smoothingLength - 1
         ) {
             return null
         }
-
-        val targetRsi =
-            current
-
+    
         /*
-         * The current smoothed RSI target is
-         * already known from the current series.
+         * Current SMA target:
+         *
+         * (previous RSI values + current RSI) / smoothing
+         * = current smoothed RSI
+         *
+         * Therefore:
+         *
+         * current RSI =
+         * current smoothed RSI * smoothing
+         * - previous RSI sum
          */
-        val currentRsiTarget =
-            targetRsi
-
+        val requiredCurrentRsi =
+            currentSmoothed *
+                    smoothingLength -
+                    previous.sum()
+    
+        if (
+            requiredCurrentRsi <= 0.0 ||
+            requiredCurrentRsi >= 100.0
+        ) {
+            return null
+        }
+    
         return reverseRsiRawPrice(
             series,
-            currentRsiTarget,
+            requiredCurrentRsi,
             rsiLength
         )
     }
