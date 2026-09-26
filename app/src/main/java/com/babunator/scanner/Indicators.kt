@@ -1004,9 +1004,7 @@ object Indicators {
             smaNullable(
                 r,
                 smaLength
-            ).lastOrNull {
-                it != null
-            }
+            ).lastOrNull()
                 ?: return null
 
         if (smaLength == 1) {
@@ -1235,9 +1233,7 @@ object Indicators {
             stochK(
                 raw,
                 kLength
-            ).lastOrNull {
-                it != null
-            }
+            ).lastOrNull()
                 ?: return null
 
         if (kLength == 1) {
@@ -1322,9 +1318,7 @@ object Indicators {
             stochD(
                 k,
                 dLength
-            ).lastOrNull {
-                it != null
-            }
+            ).lastOrNull()
                 ?: return null
 
         if (dLength == 1) {
@@ -1632,9 +1626,7 @@ object Indicators {
             ).first
 
         val current =
-            macdValues.lastOrNull {
-                it != null
-            }
+            macdValues.lastOrNull()
                 ?: return null
 
         if (smooth == 1) {
@@ -1686,9 +1678,7 @@ object Indicators {
             ).second
 
         val current =
-            values.lastOrNull {
-                it != null
-            }
+            values.lastOrNull()
                 ?: return null
 
         val requiredSignal =
