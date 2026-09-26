@@ -1155,7 +1155,7 @@ object Indicators {
         rsiLength: Int,
         smoothingLength: Int
     ): Double? {
-
+    
         if (
             level <= 0.0 ||
             level >= 100.0 ||
@@ -1164,57 +1164,272 @@ object Indicators {
         ) {
             return null
         }
-
+    
+        if (series.size <= rsiLength + smoothingLength) {
+            return null
+        }
+    
         /*
-         * If smoothing is 1, the requested level is
-         * directly the final RSI target.
+         * Build Wilder RSI state for every bar and calculate
+         * the theoretical price required to make that bar's
+         * RSI equal to the requested level.
+         *
+         * This follows the Colab reference:
+         *
+         *   1. Calculate Wilder RMA average gain/loss.
+         *   2. Use the state BEFORE each candle.
+         *   3. Reverse-engineer the required closing price.
+         *   4. EMA-smooth the resulting reverse-price series.
          */
-        if (smoothingLength == 1) {
-
-            return reverseRsiRawPrice(
-                series,
-                level,
-                rsiLength
-            )
+    
+        val delta = MutableList<Double>(series.size) { 0.0 }
+        val gains = MutableList<Double>(series.size) { 0.0 }
+        val losses = MutableList<Double>(series.size) { 0.0 }
+    
+        for (i in 1 until series.size) {
+    
+            val change =
+                series[i] -
+                        series[i - 1]
+    
+            delta[i] = change
+    
+            gains[i] =
+                if (change > 0.0) {
+                    change
+                } else {
+                    0.0
+                }
+    
+            losses[i] =
+                if (change < 0.0) {
+                    -change
+                } else {
+                    0.0
+                }
         }
-
-        val r =
-            rsi(
-                series,
-                rsiLength
-            )
-
-        val previous =
-            r.dropLast(1)
-                .takeLast(
-                    smoothingLength - 1
-                )
-                .filterNotNull()
-
+    
+        val avgGain =
+            MutableList<Double?>(series.size) {
+                null
+            }
+    
+        val avgLoss =
+            MutableList<Double?>(series.size) {
+                null
+            }
+    
+        if (series.size <= rsiLength) {
+            return null
+        }
+    
+        var gainSum = 0.0
+        var lossSum = 0.0
+    
+        for (i in 1..rsiLength) {
+    
+            gainSum += gains[i]
+            lossSum += losses[i]
+        }
+    
+        var previousGain =
+            gainSum /
+                    rsiLength.toDouble()
+    
+        var previousLoss =
+            lossSum /
+                    rsiLength.toDouble()
+    
+        avgGain[rsiLength] =
+            previousGain
+    
+        avgLoss[rsiLength] =
+            previousLoss
+    
+        for (i in rsiLength + 1 until series.size) {
+    
+            previousGain =
+                (
+                    previousGain *
+                            (rsiLength - 1) +
+                            gains[i]
+                    ) /
+                        rsiLength.toDouble()
+    
+            previousLoss =
+                (
+                    previousLoss *
+                            (rsiLength - 1) +
+                            losses[i]
+                    ) /
+                        rsiLength.toDouble()
+    
+            avgGain[i] =
+                previousGain
+    
+            avgLoss[i] =
+                previousLoss
+        }
+    
+        val targetRs =
+            level /
+                    (100.0 - level)
+    
+        val raw =
+            MutableList<Double?>(series.size) {
+                null
+            }
+    
+        /*
+         * Reverse price for candle i uses the Wilder
+         * state from candle i-1 and previous close.
+         */
+        for (i in 1 until series.size) {
+    
+            val stateIndex =
+                i - 1
+    
+            if (stateIndex < rsiLength) {
+                continue
+            }
+    
+            val averageGain =
+                avgGain[stateIndex]
+                    ?: continue
+    
+            val averageLoss =
+                avgLoss[stateIndex]
+                    ?: continue
+    
+            val previousClose =
+                series[i - 1]
+    
+            val currentRs =
+                if (averageLoss == 0.0) {
+                    Double.POSITIVE_INFINITY
+                } else {
+                    averageGain /
+                            averageLoss
+                }
+    
+            val requiredPrice =
+                if (targetRs > currentRs) {
+    
+                    previousClose +
+                            (
+                                rsiLength - 1
+                                ).toDouble() *
+                            (
+                                targetRs *
+                                        averageLoss -
+                                        averageGain
+                                )
+    
+                } else {
+    
+                    previousClose -
+                            (
+                                rsiLength - 1
+                                ).toDouble() *
+                            (
+                                averageGain /
+                                        targetRs -
+                                        averageLoss
+                                )
+                }
+    
+            raw[i] =
+                requiredPrice
+        }
+    
+        /*
+         * EMA smoothing exactly like ema_tv() in the
+         * Colab reference: SMA seed followed by
+         * recursive EMA.
+         */
+        val validStart =
+            raw.indexOfFirst {
+                it != null
+            }
+    
+        if (validStart < 0) {
+            return null
+        }
+    
         if (
-            previous.size !=
-            smoothingLength - 1
+            validStart +
+            smoothingLength >
+            raw.size
         ) {
             return null
         }
-
-        val requiredRsi =
-            level *
+    
+        var seedSum = 0.0
+    
+        for (
+            i in validStart until
+                    validStart + smoothingLength
+        ) {
+    
+            val value =
+                raw[i]
+                    ?: return null
+    
+            seedSum += value
+        }
+    
+        var previous =
+            seedSum /
+                    smoothingLength.toDouble()
+    
+        var smoothed: Double? = null
+    
+        val seedIndex =
+            validStart +
                     smoothingLength -
-                    previous.sum()
-
-        if (
-            requiredRsi <= 0.0 ||
-            requiredRsi >= 100.0
+                    1
+    
+        for (
+            i in seedIndex until
+                    raw.size
         ) {
-            return null
+    
+            if (i == seedIndex) {
+    
+                smoothed =
+                    previous
+    
+            } else {
+    
+                val value =
+                    raw[i]
+                        ?: continue
+    
+                previous =
+                    (
+                        2.0 /
+                                (
+                                    smoothingLength +
+                                            1.0
+                                    )
+                        ) *
+                            value +
+                            (
+                                1.0 -
+                                        2.0 /
+                                        (
+                                            smoothingLength +
+                                                    1.0
+                                            )
+                                ) *
+                            previous
+    
+                smoothed =
+                    previous
+            }
         }
-
-        return reverseRsiRawPrice(
-            series,
-            requiredRsi,
-            rsiLength
-        )
+    
+        return smoothed
     }
 
     /*
