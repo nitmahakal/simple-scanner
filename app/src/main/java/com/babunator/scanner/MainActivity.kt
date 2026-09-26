@@ -102,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         header.addView(
             Button(this).apply {
                 text = "⚙"
+                styleButton(this)    
                 setOnClickListener { showSettings() }
             }
         )
@@ -158,19 +159,100 @@ class MainActivity : AppCompatActivity() {
         setContentView(main)
     }
 
-    private fun navButton(title: String, action: () -> Unit): Button {
-        return Button(this).apply {
-            text = title
-            textSize = 11f
-            setOnClickListener { action() }
+private fun navButton(title: String, action: () -> Unit): Button {
+    return Button(this).apply {
+        text = title
+        textSize = 11f
+        setOnClickListener { action() }
 
-            layoutParams = LinearLayout.LayoutParams(
-                0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                1f
-            )
-        }
+        styleButton(this)
+
+        layoutParams = LinearLayout.LayoutParams(
+            0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            1f
+        )
     }
+}
+
+private fun styleButton(button: Button) {
+
+    val night =
+        (resources.configuration.uiMode and
+                android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+    val normalBackground =
+        if (night) {
+            android.graphics.Color.rgb(24, 58, 34)
+        } else {
+            android.graphics.Color.rgb(225, 239, 229)
+        }
+
+    val pressedBackground =
+        if (night) {
+            android.graphics.Color.rgb(35, 92, 50)
+        } else {
+            android.graphics.Color.rgb(199, 224, 207)
+        }
+
+    val disabledBackground =
+        if (night) {
+            android.graphics.Color.rgb(27, 38, 30)
+        } else {
+            android.graphics.Color.rgb(222, 226, 223)
+        }
+
+    val normalText =
+        if (night) {
+            android.graphics.Color.rgb(190, 255, 205)
+        } else {
+            android.graphics.Color.rgb(25, 67, 39)
+        }
+
+    val pressedText =
+        if (night) {
+            android.graphics.Color.WHITE
+        } else {
+            android.graphics.Color.rgb(18, 55, 31)
+        }
+
+    val disabledText =
+        if (night) {
+            android.graphics.Color.rgb(105, 130, 111)
+        } else {
+            android.graphics.Color.rgb(105, 112, 108)
+        }
+
+    button.backgroundTintList =
+        android.content.res.ColorStateList(
+            arrayOf(
+                intArrayOf(-android.R.attr.state_enabled),
+                intArrayOf(android.R.attr.state_pressed),
+                intArrayOf()
+            ),
+            intArrayOf(
+                disabledBackground,
+                pressedBackground,
+                normalBackground
+            )
+        )
+
+    button.setTextColor(
+        android.content.res.ColorStateList(
+            arrayOf(
+                intArrayOf(-android.R.attr.state_enabled),
+                intArrayOf(android.R.attr.state_pressed),
+                intArrayOf()
+            ),
+            intArrayOf(
+                disabledText,
+                pressedText,
+                normalText
+            )
+        )
+    )
+}
 
     // ---------------------------------------------------------
     // SCREEN 1 : UPDATE DATA
