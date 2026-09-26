@@ -1389,8 +1389,8 @@ object Indicators {
             }
 
         if (
-            requiredRaw <= 0.0 ||
-            requiredRaw >= 100.0
+            requiredRaw < 0.0 ||
+            requiredRaw > 100.0
         ) {
             return null
         }
