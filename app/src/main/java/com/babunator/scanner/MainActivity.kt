@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity() {
 
     private var updateMonitorJob: Job? = null
     private var scanMonitorJob: Job? = null
-    private var scanMonitorJob: Job? = null
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
