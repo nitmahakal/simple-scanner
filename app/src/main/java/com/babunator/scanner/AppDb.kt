@@ -149,6 +149,20 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 4)
 
         return out
     }
+    fun runConditions(runId: Long): String {
+        val c = readableDatabase.rawQuery(
+            "SELECT conditions FROM runs WHERE id=?",
+            arrayOf(runId.toString())
+        )
+
+        c.use {
+            if (it.moveToFirst()) {
+                return it.getString(0)
+            }
+        }
+
+        return ""
+    }
 
     fun results(runId: Long): List<String> {
         val out = mutableListOf<String>()
