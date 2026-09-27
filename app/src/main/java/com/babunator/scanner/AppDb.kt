@@ -6,11 +6,11 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3) {
+class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 4) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE prices(symbol TEXT NOT NULL, date TEXT NOT NULL, close REAL NOT NULL, PRIMARY KEY(symbol,date))")
-        db.execSQL("CREATE TABLE runs(id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT NOT NULL, timeframe TEXT NOT NULL, matched INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE runs(id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT NOT NULL, timeframe TEXT NOT NULL, matched INTEGER NOT NULL, conditions TEXT NOT NULL DEFAULT '')")
         db.execSQL("CREATE TABLE results(run_id INTEGER NOT NULL, symbol TEXT NOT NULL, timeframe TEXT NOT NULL, close REAL NOT NULL, note TEXT)")
         db.execSQL("CREATE TABLE update_status(id INTEGER PRIMARY KEY, total INTEGER NOT NULL DEFAULT 0, processed INTEGER NOT NULL DEFAULT 0, successful INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, retry_count INTEGER NOT NULL DEFAULT 0, last_update_time TEXT)")
         db.execSQL("CREATE TABLE history_init(symbol TEXT PRIMARY KEY NOT NULL)")
@@ -20,9 +20,14 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
         if (oldVersion < 2) {
             db.execSQL("CREATE TABLE IF NOT EXISTS update_status(id INTEGER PRIMARY KEY, total INTEGER NOT NULL DEFAULT 0, processed INTEGER NOT NULL DEFAULT 0, successful INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, retry_count INTEGER NOT NULL DEFAULT 0, last_update_time TEXT)")
         }
-
         if (oldVersion < 3) {
             db.execSQL("CREATE TABLE IF NOT EXISTS history_init(symbol TEXT PRIMARY KEY NOT NULL)")
+        }
+        
+        if (oldVersion < 4) {
+            db.execSQL(
+                "ALTER TABLE runs ADD COLUMN conditions TEXT NOT NULL DEFAULT ''"
+            )
         }
     }
 
@@ -103,12 +108,16 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
         return out
     }
 
-    fun saveRun(timeframe: String, matches: List<Match>): Long {
+    fun saveRun(
+        timeframe: String,
+        matches: List<Match>,
+        conditions: String = ""
+    ): Long {
         val cv = ContentValues()
         cv.put("created", java.time.LocalDateTime.now().toString())
         cv.put("timeframe", timeframe)
         cv.put("matched", matches.size)
-
+        cv.put("conditions", conditions)
         val id = writableDatabase.insert("runs", null, cv)
 
         for (m in matches) {
@@ -128,7 +137,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 3)
     fun recentRuns(limit: Int = 30): List<String> {
         val out = mutableListOf<String>()
         val c = readableDatabase.rawQuery(
-            "SELECT id,created,timeframe,matched FROM runs ORDER BY id DESC LIMIT ?",
+            "SELECT id,created,timeframe,matched,conditions FROM runs ORDER BY id DESC LIMIT ?",
             arrayOf(limit.toString())
         )
 
