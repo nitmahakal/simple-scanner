@@ -229,6 +229,36 @@ private fun showUpdateScreen() {
 
     val root = verticalScroll()
 
+    val screenHeader = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, 4, 0, 10)
+    }
+
+    screenHeader.addView(
+        TextView(this).apply {
+            text = "NSE Simple Scanner"
+            textSize = 22f
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        }
+    )
+
+    screenHeader.addView(
+        Button(this).apply {
+            text = "⚙"
+            styleButton(this)
+            setOnClickListener {
+                showSettings()
+            }
+        }
+    )
+
+    root.addView(screenHeader, lp())
+
     root.addView(
         title("Update Data")
     )
