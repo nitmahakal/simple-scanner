@@ -1796,26 +1796,7 @@ private fun showSavedScreen() {
                             .toLongOrNull()
 
                         if (id != null) {
-                            val results = db.results(id)
-
-                            val message = buildString {
-                                append("SCAN DETAILS\n")
-                                append("==============================\n\n")
-                                append(run)
-                                append("\n\nRESULTS\n")
-                                append("==============================\n\n")
-                                append(
-                                    results
-                                        .joinToString("\n\n")
-                                        .ifEmpty { "No matches" }
-                                )
-                            }
-
-                            AlertDialog.Builder(this@MainActivity)
-                                .setTitle("Scan #$id")
-                                .setMessage(message)
-                                .setPositiveButton("OK", null)
-                                .show()
+                            showRunDetails(db, run, id)
                         }
                     }
                 },
@@ -1950,57 +1931,273 @@ private fun showSavedScreen() {
     // EXISTING HELPERS
     // ---------------------------------------------------------
 
-    private fun showHistory() {
-        val db = AppDb(this)
-        val runs = db.recentRuns()
-    
-        if (runs.isEmpty()) {
-            AlertDialog.Builder(this)
-                .setMessage("No saved scan results yet.")
-                .setPositiveButton("OK", null)
-                .show()
-            return
-        }
-    
+private fun showHistory() {
+    val db = AppDb(this)
+    val runs = db.recentRuns()
+
+    if (runs.isEmpty()) {
         AlertDialog.Builder(this)
-            .setTitle("Scan History")
-            .setItems(runs.toTypedArray()) { _, which ->
-    
-                val selectedRun = runs[which]
-    
-                val id = selectedRun
-                    .substringAfter('#')
-                    .substringBefore(' ')
-                    .toLong()
-    
-                val results = db.results(id)
-    
-                val message = buildString {
-                    append("SCAN DETAILS\n")
-                    append("==============================\n\n")
-    
-                    append(selectedRun)
-                    append("\n\n")
-    
-                    append("RESULTS\n")
-                    append("==============================\n\n")
-    
-                    append(
-                        results
-                            .joinToString("\n\n")
-                            .ifEmpty { "No matches" }
-                    )
-                }
-    
-                AlertDialog.Builder(this)
-                    .setTitle("Scan #$id")
-                    .setMessage(message)
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
+            .setMessage("No saved scan results yet.")
+            .setPositiveButton("OK", null)
             .show()
+        return
     }
 
+    AlertDialog.Builder(this)
+        .setTitle("Scan History")
+        .setItems(runs.toTypedArray()) { _, which ->
+
+            val selectedRun = runs[which]
+
+            val id = selectedRun
+                .substringAfter('#')
+                .substringBefore(' ')
+                .toLongOrNull()
+
+            if (id != null) {
+                showRunDetails(db, selectedRun, id)
+            }
+        }
+        .show()
+}
+private fun showRunDetails(
+    db: AppDb,
+    run: String,
+    id: Long
+) {
+    val parts = run.split("  ")
+
+    val created =
+        parts.getOrNull(1) ?: "Unknown"
+
+    val timeframe =
+        parts.getOrNull(2) ?: "Unknown"
+
+    val matched =
+        parts.getOrNull(3) ?: ""
+
+    val conditions =
+        db.runConditions(id)
+
+    val results =
+        db.results(id)
+
+    val message = buildString {
+
+        append("SCAN DETAILS\n")
+        append("==============================\n\n")
+
+        append("Scan ID: #")
+        append(id)
+        append("\n")
+
+        append("Date & Time: ")
+        append(formatHistoryDateTime(created))
+        append("\n")
+
+        append("Timeframe: ")
+        append(timeframe)
+        append("\n")
+
+        if (matched.isNotBlank()) {
+            append("Matched: ")
+            append(matched.substringAfter("matched="))
+            append("\n")
+        }
+
+        append("\nCONDITIONS\n")
+        append("==============================\n\n")
+
+        append(
+            conditions.ifBlank {
+                "Condition details not available."
+            }
+        )
+
+        append("\n\nRESULTS\n")
+        append("==============================\n\n")
+
+        append(
+            formatHistoryResults(results)
+        )
+    }
+
+    AlertDialog.Builder(this)
+        .setTitle("Scan #$id")
+        .setMessage(message)
+        .setPositiveButton("OK", null)
+        .show()
+}
+
+private fun formatHistoryResults(
+    results: List<String>
+): String {
+
+    if (results.isEmpty()) {
+        return "No matches"
+    }
+
+    val grouped =
+        linkedMapOf<String, MutableList<String>>()
+
+    results.forEach { result ->
+
+        val parts =
+            result.split("  ", limit = 3)
+
+        val timeframe =
+            parts.getOrNull(1) ?: "Other"
+
+        grouped
+            .getOrPut(timeframe) {
+                mutableListOf()
+            }
+            .add(result)
+    }
+
+    return grouped.entries.joinToString("\n\n") { entry ->
+
+        val title =
+            when (entry.key) {
+                "Daily" -> "DAILY (D)"
+                "Weekly" -> "WEEKLY (W)"
+                "Monthly" -> "MONTHLY (M)"
+                else -> entry.key
+            }
+
+        buildString {
+
+            append(title)
+            append("\n")
+            append("------------------------------")
+            append("\n\n")
+
+            append(
+                entry.value.joinToString("\n\n") {
+                    formatHistoryResult(it)
+                }
+            )
+        }
+    }
+}
+
+private fun formatHistoryResult(
+    result: String
+): String {
+
+    val parts =
+        result.split("  ", limit = 3)
+
+    val symbol =
+        parts.getOrNull(0) ?: result
+
+    val rest =
+        parts.getOrNull(2) ?: ""
+
+    val closeText =
+        rest
+            .substringAfter("close=", "")
+            .substringBefore("  ")
+
+    val close =
+        closeText.toDoubleOrNull()
+
+    val note =
+        if (rest.contains("  ")) {
+            rest.substringAfter("  ")
+        } else {
+            ""
+        }
+
+    return buildString {
+
+        append(symbol)
+
+        if (close != null) {
+            append("  LTP: ")
+            append(
+                String.format(
+                    Locale.US,
+                    "%.1f",
+                    close
+                )
+            )
+        }
+
+        if (note.isNotBlank()) {
+            append("\n")
+            append(
+                formatHistoryNote(note)
+            )
+        }
+    }
+}
+
+private fun formatHistoryNote(
+    note: String
+): String {
+
+    var inValues = false
+
+    return note
+        .lines()
+        .joinToString("\n") { line ->
+
+            if (line.startsWith("Close:")) {
+                inValues = true
+            }
+
+            if (
+                inValues &&
+                !line.startsWith("Condition ") &&
+                line.contains(":")
+            ) {
+
+                val prefix =
+                    line.substringBeforeLast(":")
+
+                val value =
+                    line
+                        .substringAfterLast(":")
+                        .trim()
+                        .toDoubleOrNull()
+
+                if (value != null) {
+                    return@joinToString(
+                        "$prefix: " +
+                                String.format(
+                                    Locale.US,
+                                    "%.1f",
+                                    value
+                                )
+                    )
+                }
+            }
+
+            line
+        }
+}
+
+private fun formatHistoryDateTime(
+    value: String
+): String {
+
+    return try {
+
+        val dateTime =
+            java.time.LocalDateTime.parse(value)
+
+        dateTime.format(
+            java.time.format.DateTimeFormatter.ofPattern(
+                "dd/MM/yyyy  hh:mm:ss a",
+                Locale.ENGLISH
+            )
+        )
+
+    } catch (_: Exception) {
+        value
+    }
+}
 private fun validateConditions(
     conditions: List<Condition>
 ): String? {
