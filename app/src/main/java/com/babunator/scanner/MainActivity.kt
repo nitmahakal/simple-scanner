@@ -163,25 +163,26 @@ private fun styleButton(button: Button) {
         (resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
+
     val normalBackground =
         if (night) {
-            android.graphics.Color.rgb(31, 82, 48)
+            android.graphics.Color.rgb(35, 155, 82)   // #239B52
         } else {
-            android.graphics.Color.rgb(46, 125, 79)
+            android.graphics.Color.rgb(23, 107, 58)   // #176B3A
         }
 
     val pressedBackground =
         if (night) {
-            android.graphics.Color.rgb(45, 112, 66)
+            android.graphics.Color.rgb(45, 191, 99)   // #2DBF63
         } else {
-            android.graphics.Color.rgb(38, 104, 65)
+            android.graphics.Color.rgb(14, 77, 41)    // #0E4D29
         }
 
     val disabledBackground =
         if (night) {
-            android.graphics.Color.rgb(45, 52, 47)
+            android.graphics.Color.rgb(45, 55, 48)
         } else {
-            android.graphics.Color.rgb(190, 198, 193)
+            android.graphics.Color.rgb(205, 213, 208)
         }
 
     val normalText =
@@ -192,7 +193,7 @@ private fun styleButton(button: Button) {
 
     val disabledText =
         if (night) {
-            android.graphics.Color.rgb(105, 130, 111)
+            android.graphics.Color.rgb(130, 145, 135)
         } else {
             android.graphics.Color.rgb(105, 112, 108)
         }
@@ -225,6 +226,7 @@ private fun styleButton(button: Button) {
             )
         )
     )
+
     button.setTypeface(
         button.typeface,
         android.graphics.Typeface.BOLD
@@ -621,51 +623,85 @@ private fun showScannerScreen() {
         }
 
         root.addView(status, lp())
+val timeframeOptions = listOf(
+    "Daily",
+    "Weekly",
+    "Monthly"
+)
 
-        val timeframeOptions = listOf(
-            "Daily",
-            "Weekly",
-            "Monthly"
-        )
-        var selectedTimeframe = "Daily"
-        
-        val selectedTimeframes =
-            mutableListOf("Daily")
+var selectedTimeframe = "Daily"
 
-        val timeframeSpinner =
-            Spinner(this).apply {
-                adapter = spinner(timeframeOptions)
+val selectedTimeframes =
+    mutableListOf("Daily")
 
-                setSelection(
-                    timeframeOptions.indexOf(
-                        selectedTimeframe
-                    ).coerceAtLeast(0)
-                )
+val timeframeButton =
+    Button(this).apply {
 
-                onItemSelectedListener =
-                    object : AdapterView.OnItemSelectedListener {
+        fun updateText() {
+            text =
+                if (selectedTimeframes.size == 1) {
+                    "TIMEFRAME: ${selectedTimeframes[0]} ▼"
+                } else {
+                    "TIMEFRAMES: ${selectedTimeframes.size} SELECTED ▼"
+                }
+        }
 
-                        override fun onItemSelected(
-                            parent: AdapterView<*>?,
-                            view: View?,
-                            position: Int,
-                            id: Long
-                        ) {
-                            selectedTimeframe =
-                                timeframeOptions[position]
+        updateText()
+        textSize = 14f
+        minHeight = 52
+        minimumHeight = 52
+
+        styleButton(this)
+
+        setOnClickListener {
+
+            val checked =
+                BooleanArray(timeframeOptions.size) { index ->
+                    selectedTimeframes.contains(
+                        timeframeOptions[index]
+                    )
+                }
+
+            AlertDialog.Builder(
+                this@MainActivity
+            )
+                .setTitle("Select Timeframes")
+                .setMultiChoiceItems(
+                    timeframeOptions.toTypedArray(),
+                    checked
+                ) { _, which, isChecked ->
+
+                    val timeframe =
+                        timeframeOptions[which]
+
+                    if (isChecked) {
+                        if (!selectedTimeframes.contains(timeframe)) {
+                            selectedTimeframes.add(timeframe)
                         }
-
-                        override fun onNothingSelected(
-                            parent: AdapterView<*>?
-                        ) {
-                        }
+                    } else {
+                        selectedTimeframes.remove(timeframe)
                     }
-            }
+                }
+                .setPositiveButton("DONE") { _, _ ->
 
-        root.addView(
-            timeframeSpinner,
-            lp()
-        )
+                    if (selectedTimeframes.isEmpty()) {
+                        selectedTimeframes.add("Daily")
+                    }
+
+                    selectedTimeframe =
+                        selectedTimeframes.first()
+
+                    updateText()
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
+        }
+    }
+
+root.addView(
+    timeframeButton,
+    lp()
+)
     val logicHolder =
         arrayOf("AND")
 
@@ -2271,20 +2307,27 @@ private fun validateConditions(
             }
         }
         }
-        
         private fun cardBackground(): android.graphics.drawable.GradientDrawable {
-            val typedValue = android.util.TypedValue()
         
-            theme.resolveAttribute(
-                android.R.attr.colorBackground,
-                typedValue,
-                true
-            )
+            val night =
+                (resources.configuration.uiMode and
+                        android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                        android.content.res.Configuration.UI_MODE_NIGHT_YES
         
             return android.graphics.drawable.GradientDrawable().apply {
+        
                 cornerRadius = 20f
+        
                 setColor(
-                    typedValue.data
+                    if (night) {
+                        android.graphics.Color.rgb(
+                            24,
+                            34,
+                            28
+                        )   // #18221C
+                    } else {
+                        android.graphics.Color.WHITE
+                    }
                 )
             }
         }
