@@ -75,89 +75,54 @@ class MainActivity : AppCompatActivity() {
         buildMainLayout()
         showUpdateScreen()
     }
-
-    private fun buildMainLayout() {
-        val main = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(18, 14, 10, 10)
-        }
-
-        header.addView(
-            TextView(this).apply {
-                text = "NSE Simple Scanner"
-                textSize = 22f
-                layoutParams = LinearLayout.LayoutParams(
-                    0,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    1f
-                )
-            }
-        )
-
-        header.addView(
-            Button(this).apply {
-                text = "⚙"
-                styleButton(this)    
-                setOnClickListener { showSettings() }
-            }
-        )
-
-        main.addView(
-            header,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        content = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
-        }
-
-        main.addView(content)
-
-        val navigation = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        navigation.addView(
-            navButton("UPDATE DATA") {
-                showUpdateScreen()
-            }
-        )
-
-        navigation.addView(
-            navButton("SCANNER") {
-                showScannerScreen()
-            }
-        )
-
-        navigation.addView(
-            navButton("SAVED / TRACKING") {
-                showSavedScreen()
-            }
-        )
-
-        main.addView(
-            navigation,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        setContentView(main)
+private fun buildMainLayout() {
+    val main = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
     }
+
+    content = FrameLayout(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            0,
+            1f
+        )
+    }
+
+    main.addView(content)
+
+    val navigation = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+    }
+
+    navigation.addView(
+        navButton("UPDATE DATA") {
+            showUpdateScreen()
+        }
+    )
+
+    navigation.addView(
+        navButton("SCANNER") {
+            showScannerScreen()
+        }
+    )
+
+    navigation.addView(
+        navButton("SAVED / TRACKING") {
+            showSavedScreen()
+        }
+    )
+
+    main.addView(
+        navigation,
+        LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    )
+
+    setContentView(main)
+}
 
 private fun navButton(title: String, action: () -> Unit): Button {
     return Button(this).apply {
@@ -1738,12 +1703,12 @@ private fun formatInputNumber(
     // ---------------------------------------------------------
     // SCREEN 3 : SAVED SCANS / TRACKING
     // ---------------------------------------------------------
+private fun showSavedScreen() {
+    updateMonitorJob?.cancel()
+    scanMonitorJob?.cancel()
+    content.removeAllViews()
 
-    private fun showSavedScreen() {
-        updateMonitorJob?.cancel()
-        scanMonitorJob?.cancel()
-        
-        val root = verticalScroll()
+    val root = verticalScroll()
 
         root.addView(title("Saved Scans & Tracking"))
 
