@@ -643,15 +643,7 @@ private fun showScannerScreen() {
     content.removeAllViews()
     rows.clear()
 
-    val root = verticalScroll()
-
-        setActiveNavigation(scannerNavButton)
-        
-        val timeframeTitle = TextView(this).apply {
-            text = "TIMEFRAME SELECT"
-            textSize = 20f
-            setPadding(0, 8, 0, 8)
-        }
+    
         val root = verticalScroll()
 
         setActiveNavigation(scannerNavButton)
