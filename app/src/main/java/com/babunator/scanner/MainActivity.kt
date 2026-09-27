@@ -66,7 +66,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var content: FrameLayout
     private lateinit var status: TextView
+
+    private lateinit var updateNavButton: Button
+    private lateinit var scannerNavButton: Button
+    private lateinit var savedNavButton: Button
+
     private var updateMonitorJob: Job? = null
+    private var scanMonitorJob: Job? = null
     private var scanMonitorJob: Job? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
@@ -95,23 +101,21 @@ private fun buildMainLayout() {
         gravity = Gravity.CENTER
     }
 
-    navigation.addView(
-        navButton("UPDATE DATA") {
+        updateNavButton = navButton("UPDATE DATA") {
             showUpdateScreen()
         }
-    )
-
-    navigation.addView(
-        navButton("SCANNER") {
+        
+        scannerNavButton = navButton("SCANNER") {
             showScannerScreen()
         }
-    )
-
-    navigation.addView(
-        navButton("SAVED / TRACKING") {
+        
+        savedNavButton = navButton("SAVED / TRACKING") {
             showSavedScreen()
         }
-    )
+        
+        navigation.addView(updateNavButton)
+        navigation.addView(scannerNavButton)
+        navigation.addView(savedNavButton)
 
     main.addView(
         navigation,
@@ -139,7 +143,22 @@ private fun navButton(title: String, action: () -> Unit): Button {
         )
     }
 }
+private fun setActiveNavigation(active: Button) {
+    val buttons = listOf(
+        updateNavButton,
+        scannerNavButton,
+        savedNavButton
+    )
 
+    buttons.forEach {
+        styleButton(it)
+        it.alpha = if (it === active) 1.0f else 0.55f
+    }
+}
+
+private fun styleButton(button: Button) {
+
+    val night =
 private fun styleButton(button: Button) {
 
     val night =
@@ -259,18 +278,7 @@ private fun showUpdateScreen() {
 
     root.addView(screenHeader, lp())
 
-    root.addView(
-        title("Update Data")
-    )
-
-    root.addView(
-        TextView(this).apply {
-            text = "Daily market data • Incremental update"
-            textSize = 15f
-            setPadding(0, 0, 0, 12)
-        },
-        lp()
-    )
+    setActiveNavigation(updateNavButton)
 
     val db = AppDb(this)
     val updateStatus = db.getUpdateStatus()
@@ -288,22 +296,7 @@ private fun showUpdateScreen() {
         background = cardBackground()
     }
 
-    marketCard.addView(
-        TextView(this).apply {
-            text = "MARKET DATA"
-            textSize = 18f
-        },
-        lp()
-    )
-
-    marketCard.addView(
-        TextView(this).apply {
-            text = "NSE stock data update"
-            textSize = 14f
-            setPadding(0, 4, 0, 12)
-        },
-        lp()
-    )
+    marketCard.setPadding(18, 18, 18, 18)
         
     val updateButton = Button(this).apply {
         text = "UPDATE DATA"
@@ -409,7 +402,7 @@ private fun showUpdateScreen() {
 
     autoCard.addView(
         TextView(this).apply {
-            text = "DAILY AUTO UPDATE"
+            text = "AUTO SCHEDULE"
             textSize = 18f
         },
         lp()
@@ -417,7 +410,7 @@ private fun showUpdateScreen() {
 
         autoCard.addView(
                 TextView(this).apply {
-                    text = "Automatic daily update will use the same incremental data flow."
+                    text = "Set the daily automatic update time."
                     textSize = 14f
                     setPadding(0, 4, 0, 8)
                 },
@@ -654,21 +647,38 @@ private fun showScannerScreen() {
 
     val root = verticalScroll()
 
-    root.addView(title("Scanner"))
+        setActiveNavigation(scannerNavButton)
+        
+        val timeframeTitle = TextView(this).apply {
+            text = "TIMEFRAME SELECT"
+            textSize = 20f
+            setPadding(0, 8, 0, 8)
+        }
+        val root = verticalScroll()
 
-    status = TextView(this).apply {
-        text = "Ready"
-        textSize = 16f
-        setPadding(0, 0, 0, 12)
-    }
-
-    root.addView(status, lp())
-
-    val timeframeOptions = listOf(
-        "Daily",
-        "Weekly",
-        "Monthly"
-    )
+        setActiveNavigation(scannerNavButton)
+        
+        val timeframeTitle = TextView(this).apply {
+            text = "TIMEFRAME SELECT"
+            textSize = 20f
+            setPadding(0, 8, 0, 8)
+        }
+        
+        root.addView(timeframeTitle, lp())
+        
+        status = TextView(this).apply {
+            text = "Ready"
+            textSize = 16f
+            setPadding(0, 0, 0, 12)
+        }
+        
+        root.addView(status, lp())
+        
+        val timeframeOptions = listOf(
+            "Daily",
+            "Weekly",
+            "Monthly"
+        )
 
     val selectedTimeframes =
         mutableListOf("Daily")
@@ -1740,45 +1750,139 @@ private fun showSavedScreen() {
 
     val root = verticalScroll()
 
-        root.addView(title("Saved Scans & Tracking"))
+    setActiveNavigation(savedNavButton)
 
-        root.addView(
-            TextView(this).apply {
-                text = "Saved scans will appear here."
-                textSize = 18f
-            },
-            lp()
-        )
+    root.addView(
+        TextView(this).apply {
+            text = "SAVED SCANS & TRACKING"
+            textSize = 22f
+            setPadding(0, 8, 0, 14)
+        },
+        lp()
+    )
 
-        root.addView(
-            TextView(this).apply {
-                text = "\nThis screen will contain:\n\n" +
-                        "• Saved scan list\n" +
-                        "• Latest scan status\n" +
-                        "• Valid / Void condition\n" +
-                        "• Entry price\n" +
-                        "• Current price\n" +
-                        "• P&L\n" +
-                        "• Daily P&L\n" +
-                        "• Tracking controls\n\n" +
-                        "Tracking logic will be added separately after Update Data and Scanner are complete."
-                textSize = 15f
-            },
-            lp()
-        )
+    val db = AppDb(this)
+    val runs = db.recentRuns()
 
-        root.addView(
-            Button(this).apply {
-                text = "VIEW SCAN HISTORY"
-                setOnClickListener {
-                    showHistory()
-                }
-            },
-            lp()
-        )
-
-        content.addView(root)
+    val savedCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(18, 18, 18, 18)
+        background = cardBackground()
     }
+
+    savedCard.addView(
+        TextView(this).apply {
+            text = "SAVED SCANS"
+            textSize = 18f
+        },
+        lp()
+    )
+
+    savedCard.addView(
+        TextView(this).apply {
+            text = if (runs.isEmpty()) {
+                "No saved scans yet."
+            } else {
+                "${runs.size} saved scan(s)"
+            }
+            textSize = 15f
+            setPadding(0, 6, 0, 12)
+        },
+        lp()
+    )
+
+    if (runs.isNotEmpty()) {
+        runs.forEach { run ->
+            savedCard.addView(
+                Button(this).apply {
+                    text = run
+                    textSize = 13f
+                    styleButton(this)
+
+                    setOnClickListener {
+                        val id = run
+                            .substringAfter('#')
+                            .substringBefore(' ')
+                            .toLongOrNull()
+
+                        if (id != null) {
+                            val results = db.results(id)
+
+                            val message = buildString {
+                                append("SCAN DETAILS\n")
+                                append("==============================\n\n")
+                                append(run)
+                                append("\n\nRESULTS\n")
+                                append("==============================\n\n")
+                                append(
+                                    results
+                                        .joinToString("\n\n")
+                                        .ifEmpty { "No matches" }
+                                )
+                            }
+
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Scan #$id")
+                                .setMessage(message)
+                                .setPositiveButton("OK", null)
+                                .show()
+                        }
+                    }
+                },
+                lp()
+            )
+        }
+    }
+
+    savedCard.addView(
+        Button(this).apply {
+            text = "VIEW SCAN HISTORY"
+            styleButton(this)
+
+            setOnClickListener {
+                showHistory()
+            }
+        },
+        lp()
+    )
+
+    root.addView(
+        savedCard,
+        lp()
+    )
+
+    val trackingCard = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(18, 18, 18, 18)
+        background = cardBackground()
+    }
+
+    trackingCard.addView(
+        TextView(this).apply {
+            text = "TRACKING"
+            textSize = 18f
+        },
+        lp()
+    )
+
+    trackingCard.addView(
+        TextView(this).apply {
+            text =
+                "Saved scan tracking will show Valid / Void status, " +
+                "entry price, current price and P&L when tracking data is available."
+            textSize = 15f
+            setPadding(0, 8, 0, 0)
+        },
+        lp()
+    )
+
+    root.addView(
+        trackingCard,
+        lp()
+    )
+
+    content.addView(root)
+}
 
     // ---------------------------------------------------------
     // SETTINGS / THEME
