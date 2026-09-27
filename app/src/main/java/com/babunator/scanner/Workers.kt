@@ -221,14 +221,61 @@ class ScanWorker(
             val cfg = ScanConfigStore.load(applicationContext)
             val symbols = db.symbols()
             val matches = ScannerEngine(db).scan(symbols, cfg)
-            
             val savedTimeframes =
                 cfg.timeframes
                     .ifEmpty { listOf(cfg.timeframe) }
                     .distinct()
                     .joinToString(", ")
             
-            db.saveRun(savedTimeframes, matches)
+            val savedConditions = buildString {
+                append("TF = ")
+                append(savedTimeframes)
+                append("\n")
+                append("Logic = ")
+                append(cfg.logic)
+            
+                cfg.conditions.forEachIndexed { index, c ->
+                    append("\n")
+                    append("Condition ")
+                    append(index + 1)
+                    append(" = ")
+                    append(c.leftIndicator)
+            
+                    if (c.leftParams.isNotEmpty()) {
+                        append(
+                            c.leftParams.joinToString(
+                                prefix = "(",
+                                postfix = ")"
+                            )
+                        )
+                    }
+            
+                    append(" ")
+                    append(c.comparator)
+                    append(" ")
+                    append(c.rightIndicator)
+            
+                    if (c.rightParams.isNotEmpty()) {
+                        append(
+                            c.rightParams.joinToString(
+                                prefix = "(",
+                                postfix = ")"
+                            )
+                        )
+                    }
+            
+                    if (c.rightIndicator == "Number") {
+                        append(" ")
+                        append(c.rightTarget)
+                    }
+                }
+            }
+            
+            db.saveRun(
+                savedTimeframes,
+                matches,
+                savedConditions
+            )
             Result.success()
         } catch (_: Exception) {
             Result.failure()
