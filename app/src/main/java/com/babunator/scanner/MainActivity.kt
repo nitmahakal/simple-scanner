@@ -629,6 +629,8 @@ private fun showScannerScreen() {
         )
 
         var selectedTimeframe = "Daily"
+        val selectedTimeframes =
+            mutableListOf("Daily")
 
         val timeframeSpinner =
             Spinner(this).apply {
