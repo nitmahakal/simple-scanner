@@ -5,6 +5,7 @@ import android.content.Context
 object ScanConfigStore {
 
     private const val P = "scan_config"
+    private const val MAX_SAVED_CONDITIONS = 50
 
     fun save(
         context: Context,
@@ -15,52 +16,84 @@ object ScanConfigStore {
             Context.MODE_PRIVATE
         )
 
+        val selectedTimeframes =
+            cfg.timeframes
+                .ifEmpty { listOf(cfg.timeframe) }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+
+        val primaryTimeframe =
+            selectedTimeframes.firstOrNull()
+                ?: cfg.timeframe
+
         val e = sp.edit()
-            .putString("timeframe", cfg.timeframe)
+            .putString(
+                "timeframe",
+                primaryTimeframe
+            )
             .putString(
                 "timeframes",
-                cfg.timeframes.joinToString(",")
+                selectedTimeframes.joinToString(",")
             )
-            .putString("logic", cfg.logic)
-            .putInt("condition_count", cfg.conditions.size)
+            .putString(
+                "logic",
+                cfg.logic
+            )
+            .putInt(
+                "condition_count",
+                cfg.conditions.size
+            )
+
+        for (i in 0 until MAX_SAVED_CONDITIONS) {
+            if (i >= cfg.conditions.size) {
+                e.remove("li$i")
+                e.remove("lp$i")
+                e.remove("op$i")
+                e.remove("ri$i")
+                e.remove("rp$i")
+                e.remove("rt$i")
+                e.remove("rg$i")
+            }
+        }
 
         for (i in cfg.conditions.indices) {
 
-            val c = cfg.conditions.getOrNull(i)
+            val c = cfg.conditions[i]
 
             e.putString(
                 "li$i",
-                c?.leftIndicator ?: "Close"
+                c.leftIndicator
             )
 
             e.putString(
                 "lp$i",
-                c?.leftParams?.joinToString(",") ?: ""
+                c.leftParams.joinToString(",")
             )
 
             e.putString(
                 "op$i",
-                c?.comparator ?: "Above"
+                c.comparator
             )
 
             e.putString(
                 "ri$i",
-                c?.rightIndicator ?: "Number"
+                c.rightIndicator
             )
 
             e.putString(
                 "rp$i",
-                c?.rightParams?.joinToString(",") ?: ""
+                c.rightParams.joinToString(",")
             )
 
             e.putString(
                 "rt$i",
-                (c?.rightTarget ?: 0.0).toString()
+                c.rightTarget.toString()
             )
 
             e.putString(
                 "rg$i",
-                (c?.rangePct ?: 1.0).toString()
+                c.rangePct.toString()
             )
         }
 
@@ -89,79 +122,100 @@ object ScanConfigStore {
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
                 ?.distinct()
+                ?.ifEmpty { listOf(oldTimeframe) }
                 ?: listOf(oldTimeframe)
 
         val conditionCount =
             if (sp.contains("condition_count")) {
-                sp.getInt("condition_count", 1)
+                sp.getInt(
+                    "condition_count",
+                    1
+                ).coerceIn(
+                    0,
+                    MAX_SAVED_CONDITIONS
+                )
             } else {
                 when {
                     sp.contains("li2") -> 3
                     sp.contains("li1") -> 2
-                    else -> 1
+                    sp.contains("li0") -> 1
+                    else -> 0
                 }
-            }        
-        val cs = (0 until conditionCount).mapNotNull { i ->
+            }
 
-            val li =
-                sp.getString("li$i", null)
-                    ?: return@mapNotNull null
+        val cs =
+            (0 until conditionCount).mapNotNull { i ->
 
-            val lp =
-                sp.getString("lp$i", "")
-                    .orEmpty()
-                    .split(',')
-                    .mapNotNull {
-                        it.trim().toDoubleOrNull()
-                    }
+                val li =
+                    sp.getString(
+                        "li$i",
+                        null
+                    )
+                        ?: return@mapNotNull null
 
-            val op =
-                sp.getString(
-                    "op$i",
-                    "Above"
-                ) ?: "Above"
+                val lp =
+                    sp.getString(
+                        "lp$i",
+                        ""
+                    )
+                        .orEmpty()
+                        .split(',')
+                        .mapNotNull {
+                            it.trim().toDoubleOrNull()
+                        }
 
-            val ri =
-                sp.getString(
-                    "ri$i",
-                    "Number"
-                ) ?: "Number"
+                val op =
+                    sp.getString(
+                        "op$i",
+                        "Above"
+                    ) ?: "Above"
 
-            val rp =
-                sp.getString("rp$i", "")
-                    .orEmpty()
-                    .split(',')
-                    .mapNotNull {
-                        it.trim().toDoubleOrNull()
-                    }
+                val ri =
+                    sp.getString(
+                        "ri$i",
+                        "Number"
+                    ) ?: "Number"
 
-            val rightTarget =
-                sp.getString(
-                    "rt$i",
-                    null
-                )?.toDoubleOrNull()
-                    ?: 0.0
+                val rp =
+                    sp.getString(
+                        "rp$i",
+                        ""
+                    )
+                        .orEmpty()
+                        .split(',')
+                        .mapNotNull {
+                            it.trim().toDoubleOrNull()
+                        }
 
-            val rangePct =
-                sp.getString(
-                    "rg$i",
-                    null
-                )?.toDoubleOrNull()
-                    ?: 1.0
+                val rightTarget =
+                    sp.getString(
+                        "rt$i",
+                        null
+                    )
+                        ?.toDoubleOrNull()
+                        ?: 0.0
 
-            Condition(
-                leftIndicator = li,
-                leftParams = lp,
-                comparator = op,
-                rightIndicator = ri,
-                rightParams = rp,
-                rightTarget = rightTarget,
-                rangePct = rangePct
-            )
-        }
+                val rangePct =
+                    sp.getString(
+                        "rg$i",
+                        null
+                    )
+                        ?.toDoubleOrNull()
+                        ?: 1.0
+
+                Condition(
+                    leftIndicator = li,
+                    leftParams = lp,
+                    comparator = op,
+                    rightIndicator = ri,
+                    rightParams = rp,
+                    rightTarget = rightTarget,
+                    rangePct = rangePct
+                )
+            }
 
         return ScanConfig(
-            timeframe = oldTimeframe,
+            timeframe = savedTimeframes.first(),
             logic =
                 sp.getString(
                     "logic",
