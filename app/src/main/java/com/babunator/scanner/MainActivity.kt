@@ -156,9 +156,7 @@ private fun setActiveNavigation(active: Button) {
     }
 }
 
-private fun styleButton(button: Button) {
 
-    val night =
 private fun styleButton(button: Button) {
 
     val night =
