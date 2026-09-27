@@ -1,0 +1,15 @@
+<resources>
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+
+        <item name="android:windowBackground">#0F1511</item>
+        <item name="android:colorBackground">#0F1511</item>
+
+        <item name="android:textColorPrimary">#F1F5F2</item>
+        <item name="android:textColorSecondary">#B8C5BC</item>
+
+        <item name="android:colorAccent">#4ADE80</item>
+
+        <item name="android:navigationBarColor">#0F1511</item>
+    </style>
+</resources>
