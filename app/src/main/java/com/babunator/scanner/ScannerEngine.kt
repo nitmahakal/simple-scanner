@@ -36,129 +36,141 @@ class ScannerEngine(private val db: AppDb) {
 
         val hits = mutableListOf<Match>()
 
+        val selectedTimeframes =
+            cfg.timeframes
+                .ifEmpty { listOf(cfg.timeframe) }
+                .distinct()
+
         for (s in symbols) {
 
-            val rows = resample(
-                db.getHistory(s),
-                cfg.timeframe
-            )
+            val history = db.getHistory(s)
 
-            if (rows.isEmpty()) continue
+            if (history.isEmpty()) continue
 
-            val close = rows.map { it.close }
+            for (timeframe in selectedTimeframes) {
 
-            val checks = mutableListOf<Boolean>()
-            val conditionDetails = mutableListOf<String>()
-            val indicatorValues = linkedMapOf<String, String>()
-
-            val currentValueCache =
-                mutableMapOf<String, Double?>()
-
-            fun cachedValue(
-                indicator: String,
-                params: List<Double>
-            ): Double? {
-
-                val key =
-                    indicator +
-                            "|" +
-                            params.joinToString(",")
-
-                return currentValueCache.getOrPut(key) {
-                    ConditionEngineValue.value(
-                        close,
-                        indicator,
-                        params
-                    )
-                }
-            }
-
-            for ((index, condition) in cfg.conditions.withIndex()) {
-
-                val leftValue = cachedValue(
-                    condition.leftIndicator,
-                    condition.leftParams
+                val rows = resample(
+                    history,
+                    timeframe
                 )
 
-                val rightValue =
-                    if (condition.rightIndicator == "Number") {
-                        condition.rightTarget
-                    } else {
-                        cachedValue(
-                            condition.rightIndicator,
-                            condition.rightParams
+                if (rows.isEmpty()) continue
+
+                val close = rows.map { it.close }
+
+                val checks = mutableListOf<Boolean>()
+                val conditionDetails = mutableListOf<String>()
+                val indicatorValues = linkedMapOf<String, String>()
+
+                val currentValueCache =
+                    mutableMapOf<String, Double?>()
+
+                fun cachedValue(
+                    indicator: String,
+                    params: List<Double>
+                ): Double? {
+
+                    val key =
+                        indicator +
+                                "|" +
+                                params.joinToString(",")
+
+                    return currentValueCache.getOrPut(key) {
+                        ConditionEngineValue.value(
+                            close,
+                            indicator,
+                            params
                         )
                     }
+                }
 
-                val check = ConditionEngine.evaluate(
-                    series = close,
-                    c = condition,
-                    currentLeft = leftValue,
-                    currentRight = rightValue
-                )
+                for ((index, condition) in cfg.conditions.withIndex()) {
 
-                checks += check
+                    val leftValue = cachedValue(
+                        condition.leftIndicator,
+                        condition.leftParams
+                    )
 
-                conditionDetails +=
-                    "Condition ${index + 1}: " +
-                            "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
-                            "${condition.comparator} " +
-                            "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
-                            if (condition.rightIndicator == "Number") {
-                                " ${formatNumber(condition.rightTarget)}"
-                            } else {
-                                ""
-                            }
+                    val rightValue =
+                        if (condition.rightIndicator == "Number") {
+                            condition.rightTarget
+                        } else {
+                            cachedValue(
+                                condition.rightIndicator,
+                                condition.rightParams
+                            )
+                        }
 
-                indicatorValues[
-                    "${condition.leftIndicator}${formatParams(condition.leftParams)}"
-                ] = formatNumber(leftValue)
+                    val check = ConditionEngine.evaluate(
+                        series = close,
+                        c = condition,
+                        currentLeft = leftValue,
+                        currentRight = rightValue
+                    )
 
-                if (condition.rightIndicator != "Number") {
+                    checks += check
+
+                    conditionDetails +=
+                        "Condition ${index + 1}: " +
+                                "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
+                                "${condition.comparator} " +
+                                "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
+                                if (condition.rightIndicator == "Number") {
+                                    " ${formatNumber(condition.rightTarget)}"
+                                } else {
+                                    ""
+                                }
+
                     indicatorValues[
-                        "${condition.rightIndicator}${formatParams(condition.rightParams)}"
-                    ] = formatNumber(rightValue)
-                }
-            }
+                        "${condition.leftIndicator}${formatParams(condition.leftParams)}"
+                    ] = formatNumber(leftValue)
 
-            val ok =
-                if (cfg.logic == "OR") {
-                    checks.any { it }
-                } else {
-                    checks.all { it }
+                    if (condition.rightIndicator != "Number") {
+                        indicatorValues[
+                            "${condition.rightIndicator}${formatParams(condition.rightParams)}"
+                        ] = formatNumber(rightValue)
+                    }
                 }
 
-            if (ok) {
+                val ok =
+                    if (cfg.logic == "OR") {
+                        checks.any { it }
+                    } else {
+                        checks.all { it }
+                    }
 
-                val details = buildString {
+                if (ok) {
 
-                    append(
-                        conditionDetails.joinToString("\n")
-                    )
-
-                    append("\n\n")
-
-                    append(
-                        "Close: ${formatNumber(close.last())}"
-                    )
-
-                    if (indicatorValues.isNotEmpty()) {
-                        append("\n")
+                    val details = buildString {
 
                         append(
-                            indicatorValues.entries.joinToString("\n") {
-                                "${it.key}: ${it.value}"
-                            }
+                            conditionDetails.joinToString("\n")
                         )
-                    }
-                }
 
-                hits += Match(
-                    symbol = s,
-                    timeframe = cfg.timeframe,
-                    close = close.last(),
-                    note = details
-                )
+                        append("\n\n")
+
+                        append(
+                            "Close: ${formatNumber(close.last())}"
+                        )
+
+                        if (indicatorValues.isNotEmpty()) {
+                            append("\n")
+
+                            append(
+                                indicatorValues.entries.joinToString("\n") {
+                                    "${it.key}: ${it.value}"
+                                }
+                            )
+                        }
+                    }
+
+                    hits += Match(
+                        symbol = s,
+                        timeframe = timeframe,
+                        close = close.last(),
+                        note = details
+                    )
+                }
             }
         }
 
