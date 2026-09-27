@@ -221,7 +221,14 @@ class ScanWorker(
             val cfg = ScanConfigStore.load(applicationContext)
             val symbols = db.symbols()
             val matches = ScannerEngine(db).scan(symbols, cfg)
-            db.saveRun(cfg.timeframe, matches)
+            
+            val savedTimeframes =
+                cfg.timeframes
+                    .ifEmpty { listOf(cfg.timeframe) }
+                    .distinct()
+                    .joinToString(", ")
+            
+            db.saveRun(savedTimeframes, matches)
             Result.success()
         } catch (_: Exception) {
             Result.failure()
