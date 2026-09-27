@@ -163,41 +163,32 @@ private fun styleButton(button: Button) {
         (resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
-
     val normalBackground =
         if (night) {
-            android.graphics.Color.rgb(24, 58, 34)
+            android.graphics.Color.rgb(31, 82, 48)
         } else {
-            android.graphics.Color.rgb(225, 239, 229)
+            android.graphics.Color.rgb(46, 125, 79)
         }
 
     val pressedBackground =
         if (night) {
-            android.graphics.Color.rgb(35, 92, 50)
+            android.graphics.Color.rgb(45, 112, 66)
         } else {
-            android.graphics.Color.rgb(199, 224, 207)
+            android.graphics.Color.rgb(38, 104, 65)
         }
 
     val disabledBackground =
         if (night) {
-            android.graphics.Color.rgb(27, 38, 30)
+            android.graphics.Color.rgb(45, 52, 47)
         } else {
-            android.graphics.Color.rgb(222, 226, 223)
+            android.graphics.Color.rgb(190, 198, 193)
         }
 
     val normalText =
-        if (night) {
-            android.graphics.Color.rgb(190, 255, 205)
-        } else {
-            android.graphics.Color.rgb(25, 67, 39)
-        }
+        android.graphics.Color.WHITE
 
     val pressedText =
-        if (night) {
-            android.graphics.Color.WHITE
-        } else {
-            android.graphics.Color.rgb(18, 55, 31)
-        }
+        android.graphics.Color.WHITE
 
     val disabledText =
         if (night) {
@@ -233,6 +224,10 @@ private fun styleButton(button: Button) {
                 normalText
             )
         )
+    )
+    button.setTypeface(
+        button.typeface,
+        android.graphics.Typeface.BOLD
     )
 }
 
@@ -401,19 +396,11 @@ private fun showUpdateScreen() {
     autoCard.addView(
         TextView(this).apply {
             text = "AUTO SCHEDULE"
-            textSize = 18f
+            textSize = 16f
         },
         lp()
     )
 
-        autoCard.addView(
-                TextView(this).apply {
-                    text = "Set the daily automatic update time."
-                    textSize = 14f
-                    setPadding(0, 4, 0, 8)
-                },
-                lp()
-        )
 
                 autoCard.addView(
                 Button(this).apply {
@@ -511,41 +498,7 @@ private fun showUpdateScreen() {
         lp()
     )
 
-    // ---------------------------------------------------------
-    // HOW RESUME WORKS CARD
-    // ---------------------------------------------------------
-
-    val resumeCard = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(18, 18, 18, 18)
-        background = cardBackground()
-    }
-
-    resumeCard.addView(
-        TextView(this).apply {
-            text = "HOW RESUME WORKS"
-            textSize = 18f
-        },
-        lp()
-    )
-
-    resumeCard.addView(
-        TextView(this).apply {
-            text =
-                "• Existing data is kept\\n" +
-                "• Update continues incrementally\\n" +
-                "• Failed data is retried\\n" +
-                "• Progress and status are saved"
-            textSize = 14f
-            setPadding(0, 8, 0, 0)
-        },
-        lp()
-    )
-
-    root.addView(
-        resumeCard,
-        lp()
-    )
+    
 
     // ---------------------------------------------------------
     // CURRENT STATUS
@@ -648,78 +601,69 @@ private fun showScannerScreen() {
 
         setActiveNavigation(scannerNavButton)
         
-        val timeframeTitle = TextView(this).apply {
-            text = "TIMEFRAME SELECT"
-            textSize = 20f
-            setPadding(0, 8, 0, 8)
-        }
-        
-        root.addView(timeframeTitle, lp())
-        
+                root.addView(
+            TextView(this).apply {
+                text = "SCANNER"
+                textSize = 16f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 8, 0, 14)
+            },
+            lp()
+        )
+
         status = TextView(this).apply {
             text = "Ready"
-            textSize = 16f
-            setPadding(0, 0, 0, 12)
+            textSize = 15f
+            setPadding(0, 0, 0, 8)
         }
-        
+
         root.addView(status, lp())
-        
+
         val timeframeOptions = listOf(
             "Daily",
             "Weekly",
             "Monthly"
         )
 
-    val selectedTimeframes =
-        mutableListOf("Daily")
+        var selectedTimeframe = "Daily"
 
-    val timeframeButton =
-        Button(this).apply {
-            text = "Daily"
-            styleButton(this)
-        }
+        val timeframeSpinner =
+            Spinner(this).apply {
+                adapter = spinner(timeframeOptions)
 
-    timeframeButton.setOnClickListener {
+                setSelection(
+                    timeframeOptions.indexOf(
+                        selectedTimeframe
+                    ).coerceAtLeast(0)
+                )
 
-        val checked =
-            timeframeOptions.map {
-                selectedTimeframes.contains(it)
-            }.toBooleanArray()
+                onItemSelectedListener =
+                    object : AdapterView.OnItemSelectedListener {
 
-        AlertDialog.Builder(this@MainActivity)
-            .setTitle("Select Timeframes")
-            .setMultiChoiceItems(
-                timeframeOptions.toTypedArray(),
-                checked
-            ) { _, which, isChecked ->
+                        override fun onItemSelected(
+                            parent: AdapterView<*>?,
+                            view: View?,
+                            position: Int,
+                            id: Long
+                        ) {
+                            selectedTimeframe =
+                                timeframeOptions[position]
+                        }
 
-                val value =
-                    timeframeOptions[which]
-
-                if (isChecked) {
-                    if (!selectedTimeframes.contains(value)) {
-                        selectedTimeframes.add(value)
+                        override fun onNothingSelected(
+                            parent: AdapterView<*>?
+                        ) {
+                        }
                     }
-                } else {
-                    selectedTimeframes.remove(value)
-                }
             }
-            .setPositiveButton("DONE") { _, _ ->
 
-                if (selectedTimeframes.isEmpty()) {
-                    selectedTimeframes.add("Daily")
-                }
-
-                timeframeButton.text =
-                    selectedTimeframes.joinToString(", ")
-            }
-            .setNegativeButton("CANCEL", null)
-            .show()
-    }
-
-    root.addView(label("Timeframes"))
-    root.addView(timeframeButton, lp())
-
+        root.addView(
+            timeframeSpinner,
+            lp()
+        )
     val logicHolder =
         arrayOf("AND")
 
@@ -1768,46 +1712,15 @@ private fun showSavedScreen() {
         lp()
     )
 
-    savedCard.addView(
-        TextView(this).apply {
-            text = if (runs.isEmpty()) {
-                "No saved scans yet."
-            } else {
-                "${runs.size} saved scan(s)"
-            }
-            textSize = 15f
-            setPadding(0, 6, 0, 12)
-        },
-        lp()
-    )
-
-    if (runs.isNotEmpty()) {
-        runs.forEach { run ->
-            savedCard.addView(
-                Button(this).apply {
-                    text = run
-                    textSize = 13f
-                    styleButton(this)
-
-                    setOnClickListener {
-                        val id = run
-                            .substringAfter('#')
-                            .substringBefore(' ')
-                            .toLongOrNull()
-
-                        if (id != null) {
-                            showRunDetails(db, run, id)
-                        }
-                    }
-                },
-                lp()
-            )
-        }
-    }
-
-    savedCard.addView(
+        savedCard.addView(
         Button(this).apply {
-            text = "VIEW SCAN HISTORY"
+            text =
+                if (runs.isEmpty()) {
+                    "VIEW SCAN HISTORY ▼"
+                } else {
+                    "VIEW SCAN HISTORY (${runs.size}) ▼"
+                }
+
             styleButton(this)
 
             setOnClickListener {
