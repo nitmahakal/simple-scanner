@@ -627,8 +627,8 @@ private fun showScannerScreen() {
             "Weekly",
             "Monthly"
         )
-
-        var selectedTimeframe = "D
+        var selectedTimeframe = "Daily"
+        
         val selectedTimeframes =
             mutableListOf("Daily")
 
