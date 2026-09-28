@@ -1430,18 +1430,35 @@ root.addView(
                             status.text =
                                 "Scan in progress..."
                         }
-
                         workInfo.state ==
                                 androidx.work.WorkInfo.State.SUCCEEDED -> {
-
+                        
                             scanButton.text =
                                 "SCAN NOW"
-
+                        
                             scanButton.isEnabled =
                                 true
-
+                        
                             status.text =
                                 "Scan completed."
+                        
+                            val latestRun =
+                                AppDb(this@MainActivity)
+                                    .recentRuns(1)
+                                    .firstOrNull()
+                        
+                            if (latestRun != null) {
+                        
+                                val runId =
+                                    latestRun
+                                        .substringAfter("#")
+                                        .substringBefore(" ")
+                                        .toLongOrNull()
+                        
+                                if (runId != null) {
+                                    showScanResultScreen(runId)
+                                }
+                            }
                         }
 
                         workInfo.state ==
@@ -1478,7 +1495,111 @@ root.addView(
 
     content.addView(root)
 }
+private fun showScanResultScreen(runId: Long) {
 
+    scanMonitorJob?.cancel()
+    updateMonitorJob?.cancel()
+
+    content.removeAllViews()
+
+    setActiveNavigation(scannerNavButton)
+
+    val root = verticalScroll()
+
+    val db = AppDb(this)
+
+    val runHeader =
+        db.recentRuns(30)
+            .firstOrNull {
+                it.startsWith("#$runId ")
+            }
+
+    root.addView(
+        TextView(this).apply {
+            text = "SCAN RESULT"
+            textSize = 20f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 8, 0, 14)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = runHeader ?: "#$runId"
+            textSize = 14f
+            setPadding(0, 0, 0, 12)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = db.runConditions(runId)
+            textSize = 14f
+            setPadding(0, 0, 0, 14)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = "MATCHED STOCKS"
+            textSize = 16f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 8, 0, 8)
+        },
+        lp()
+    )
+
+    val results = db.results(runId)
+
+    if (results.isEmpty()) {
+
+        root.addView(
+            TextView(this).apply {
+                text = "No stocks matched this scan."
+                textSize = 15f
+                setPadding(0, 8, 0, 16)
+            },
+            lp()
+        )
+
+    } else {
+
+        results.forEach { result ->
+
+            root.addView(
+                TextView(this).apply {
+                    text = result
+                    textSize = 14f
+                    setPadding(0, 6, 0, 6)
+                },
+                lp()
+            )
+        }
+    }
+
+    root.addView(
+        Button(this).apply {
+            text = "← BACK TO SCANNER"
+            styleButton(this)
+
+            setOnClickListener {
+                showScannerScreen()
+            }
+        },
+        lp()
+    )
+
+    content.addView(root)
+}
 private fun addConditionRow(
     root: ViewGroup,
     idx: Int
