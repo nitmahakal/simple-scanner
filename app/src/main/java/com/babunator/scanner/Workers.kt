@@ -326,14 +326,101 @@ class AutoTrackingWorker(
                     status = status
                 )
 
-                db.setSavedScanStatus(
+                updateOpenTrackingPositions(
+                    db = db,
                     savedScanId = savedScan.id,
-                    status = status
+                    matches = matches
                 )
 
                 trackedCount++
                 matchedCount += matches.size
             }
+
+    private fun updateOpenTrackingPositions(
+        db: AppDb,
+        savedScanId: Long,
+        matches: List<Match>
+    ) {
+        val now = LocalDateTime.now().toString()
+
+        val existing =
+            db.getTrackingPositions(savedScanId)
+                .associateBy {
+                    "${it.symbol}|${it.timeframe}"
+                }
+
+        matches.forEach { match ->
+
+            val key =
+                "${match.symbol}|${match.timeframe}"
+
+            val old = existing[key]
+
+            if (old == null) {
+
+                db.upsertTrackingPosition(
+                    savedScanId = savedScanId,
+                    symbol = match.symbol,
+                    timeframe = match.timeframe,
+                    entryPrice = match.close,
+                    currentPrice = match.close,
+                    lowestPrice = match.close,
+                    pnl = 0.0,
+                    maxDownside = 0.0,
+                    status = "OPEN",
+                    opened = now,
+                    updated = now
+                )
+
+            } else {
+
+                val currentPrice = match.close
+
+                val lowestPrice =
+                    minOf(
+                        old.lowestPrice,
+                        currentPrice
+                    )
+
+                val pnl =
+                    if (old.entryPrice == 0.0) {
+                        0.0
+                    } else {
+                        (
+                            (currentPrice - old.entryPrice) /
+                                old.entryPrice
+                            ) * 100.0
+                    }
+
+                val maxDownside =
+                    if (old.entryPrice == 0.0) {
+                        0.0
+                    } else {
+                        (
+                            (lowestPrice - old.entryPrice) /
+                                old.entryPrice
+                            ) * 100.0
+                    }
+
+                db.upsertTrackingPosition(
+                    savedScanId = savedScanId,
+                    symbol = match.symbol,
+                    timeframe = match.timeframe,
+                    entryPrice = old.entryPrice,
+                    currentPrice = currentPrice,
+                    lowestPrice = lowestPrice,
+                    pnl = pnl,
+                    maxDownside = minOf(
+                        old.maxDownside,
+                        maxDownside
+                    ),
+                    status = "OPEN",
+                    opened = old.opened,
+                    updated = now
+                )
+            }
+        }
+    }
 
             showTrackingNotification(
                 applicationContext,
