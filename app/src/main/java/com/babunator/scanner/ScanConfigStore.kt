@@ -1,6 +1,8 @@
 package com.babunator.scanner
 
 import android.content.Context
+import org.json.JSONArray
+import org.json.JSONObject
 
 object ScanConfigStore {
 
@@ -239,5 +241,190 @@ object ScanConfigStore {
                 },
             timeframes = savedTimeframes
         )
+    }
+
+    fun toJson(cfg: ScanConfig): String {
+        val root = JSONObject()
+
+        root.put("timeframe", cfg.timeframe)
+        root.put("logic", cfg.logic)
+
+        val timeframes = JSONArray()
+        cfg.timeframes
+            .ifEmpty { listOf(cfg.timeframe) }
+            .distinct()
+            .forEach {
+                timeframes.put(it)
+            }
+
+        root.put("timeframes", timeframes)
+
+        val conditions = JSONArray()
+
+        cfg.conditions.forEach { c ->
+
+            val condition = JSONObject()
+
+            condition.put(
+                "leftIndicator",
+                c.leftIndicator
+            )
+
+            condition.put(
+                "leftParams",
+                JSONArray(c.leftParams)
+            )
+
+            condition.put(
+                "comparator",
+                c.comparator
+            )
+
+            condition.put(
+                "rightIndicator",
+                c.rightIndicator
+            )
+
+            condition.put(
+                "rightParams",
+                JSONArray(c.rightParams)
+            )
+
+            condition.put(
+                "rightTarget",
+                c.rightTarget
+            )
+
+            condition.put(
+                "rangePct",
+                c.rangePct
+            )
+
+            conditions.put(condition)
+        }
+
+        root.put("conditions", conditions)
+
+        return root.toString()
+    }
+
+    fun fromJson(json: String): ScanConfig {
+        val root = JSONObject(json)
+
+        val timeframes = mutableListOf<String>()
+
+        val tfArray = root.optJSONArray("timeframes")
+
+        if (tfArray != null) {
+            for (i in 0 until tfArray.length()) {
+                val value = tfArray.optString(i).trim()
+
+                if (value.isNotEmpty() &&
+                    !timeframes.contains(value)
+                ) {
+                    timeframes += value
+                }
+            }
+        }
+
+        val fallbackTimeframe =
+            root.optString(
+                "timeframe",
+                "Daily"
+            )
+
+        if (timeframes.isEmpty()) {
+            timeframes += fallbackTimeframe
+        }
+
+        val conditions = mutableListOf<Condition>()
+
+        val conditionArray =
+            root.optJSONArray("conditions")
+
+        if (conditionArray != null) {
+
+            for (i in 0 until conditionArray.length()) {
+
+                val item =
+                    conditionArray.optJSONObject(i)
+                        ?: continue
+
+                val leftParams =
+                    jsonNumbers(
+                        item.optJSONArray("leftParams")
+                    )
+
+                val rightParams =
+                    jsonNumbers(
+                        item.optJSONArray("rightParams")
+                    )
+
+                conditions += Condition(
+                    leftIndicator =
+                        item.optString(
+                            "leftIndicator",
+                            "EMA"
+                        ),
+                    leftParams = leftParams,
+                    comparator =
+                        item.optString(
+                            "comparator",
+                            "Above"
+                        ),
+                    rightIndicator =
+                        item.optString(
+                            "rightIndicator",
+                            "Number"
+                        ),
+                    rightParams = rightParams,
+                    rightTarget =
+                        item.optDouble(
+                            "rightTarget",
+                            0.0
+                        ),
+                    rangePct =
+                        item.optDouble(
+                            "rangePct",
+                            1.0
+                        )
+                )
+            }
+        }
+
+        return ScanConfig(
+            timeframe = timeframes.first(),
+            logic =
+                root.optString(
+                    "logic",
+                    "AND"
+                ),
+            conditions = conditions,
+            timeframes = timeframes
+        )
+    }
+
+    private fun jsonNumbers(
+        array: JSONArray?
+    ): List<Double> {
+
+        if (array == null) {
+            return emptyList()
+        }
+
+        val out = mutableListOf<Double>()
+
+        for (i in 0 until array.length()) {
+            val value = array.optDouble(
+                i,
+                Double.NaN
+            )
+
+            if (!value.isNaN()) {
+                out += value
+            }
+        }
+
+        return out
     }
 }
