@@ -336,6 +336,23 @@ class AutoTrackingWorker(
                 matchedCount += matches.size
             }
 
+            showTrackingNotification(
+                applicationContext,
+                trackedCount,
+                matchedCount
+            )
+            Result.success(
+                Data.Builder()
+                    .putInt("tracked_scans", trackedCount)
+                    .putInt("matched_results", matchedCount)
+                    .build()
+            )
+
+        } catch (_: Exception) {
+            Result.failure()
+        }
+    }
+    
     private fun updateOpenTrackingPositions(
         db: AppDb,
         savedScanId: Long,
@@ -419,24 +436,6 @@ class AutoTrackingWorker(
                     updated = now
                 )
             }
-        }
-    }
-
-            showTrackingNotification(
-                applicationContext,
-                trackedCount,
-                matchedCount
-            )
-
-            Result.success(
-                Data.Builder()
-                    .putInt("tracked_scans", trackedCount)
-                    .putInt("matched_results", matchedCount)
-                    .build()
-            )
-
-        } catch (_: Exception) {
-            Result.failure()
         }
     }
 
