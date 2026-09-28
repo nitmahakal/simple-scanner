@@ -1367,7 +1367,7 @@ root.addView(
     
     val saveButton =
     Button(this).apply {
-        text = "SAVE SCAN"
+        text = "TRACK SCAN"
         styleButton(this)
 
         setOnClickListener {
@@ -1441,7 +1441,7 @@ root.addView(
 
             Toast.makeText(
                 this@MainActivity,
-                "Scan #$savedId saved.",
+                "Scan added to User Track Scans.",
                 Toast.LENGTH_SHORT
             ).show()
         }
