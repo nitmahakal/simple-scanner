@@ -1,7 +1,10 @@
-
 package com.babunator.scanner
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -57,17 +60,10 @@ class UpdateWorker(
 
                 var updated = false
 
-                // First attempt.
                 try {
                     val rows = if (!historyInitialized) {
-                        // First complete initialization:
-                        // fetch maximum available daily history.
                         provider.fetchDaily(s, 500)
                     } else {
-                        // Already initialized:
-                        // fetch only from the last stored date onward.
-                        // Including the last date allows today's value
-                        // to be refreshed and safely replaced by upsert.
                         val lastDate = history.lastOrNull()
                             ?.date
                             ?.let { LocalDate.parse(it) }
@@ -90,7 +86,6 @@ class UpdateWorker(
                 } catch (_: Exception) {
                 }
 
-                // Exactly one retry for this stock if the first attempt failed.
                 if (!updated) {
                     retryCount++
 
@@ -183,7 +178,8 @@ class UpdateWorker(
                             )
                             .build()
                     )
-                    .build()               
+                    .build()
+
                 WorkManager.getInstance(applicationContext)
                     .enqueueUniqueWork(
                         "nse_data_update",
@@ -203,8 +199,6 @@ class UpdateWorker(
             )
 
         } catch (_: Exception) {
-            // Per-stock retry is already controlled above.
-            // No additional automatic Worker retry.
             Result.failure()
         }
     }
@@ -221,26 +215,27 @@ class ScanWorker(
             val cfg = ScanConfigStore.load(applicationContext)
             val symbols = db.symbols()
             val matches = ScannerEngine(db).scan(symbols, cfg)
+
             val savedTimeframes =
                 cfg.timeframes
                     .ifEmpty { listOf(cfg.timeframe) }
                     .distinct()
                     .joinToString(", ")
-            
+
             val savedConditions = buildString {
                 append("TF = ")
                 append(savedTimeframes)
                 append("\n")
                 append("Logic = ")
                 append(cfg.logic)
-            
+
                 cfg.conditions.forEachIndexed { index, c ->
                     append("\n")
                     append("Condition ")
                     append(index + 1)
                     append(" = ")
                     append(c.leftIndicator)
-            
+
                     if (c.leftParams.isNotEmpty()) {
                         append(
                             c.leftParams.joinToString(
@@ -249,12 +244,12 @@ class ScanWorker(
                             )
                         )
                     }
-            
+
                     append(" ")
                     append(c.comparator)
                     append(" ")
                     append(c.rightIndicator)
-            
+
                     if (c.rightParams.isNotEmpty()) {
                         append(
                             c.rightParams.joinToString(
@@ -263,22 +258,145 @@ class ScanWorker(
                             )
                         )
                     }
-            
+
                     if (c.rightIndicator == "Number") {
                         append(" ")
                         append(c.rightTarget)
                     }
                 }
             }
-            
+
             db.saveRun(
                 savedTimeframes,
                 matches,
                 savedConditions
             )
+
             Result.success()
         } catch (_: Exception) {
             Result.failure()
         }
+    }
+}
+
+class AutoTrackingWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val db = AppDb(applicationContext)
+            val symbols = db.symbols()
+            val activeSavedScans = db.getAutoTrackSavedScans()
+
+            if (activeSavedScans.isEmpty()) {
+                return Result.success()
+            }
+
+            var trackedCount = 0
+            var matchedCount = 0
+
+            for (savedScan in activeSavedScans) {
+
+                val config = try {
+                    ScanConfigStore.fromJson(
+                        savedScan.configJson
+                    )
+                } catch (_: Exception) {
+                    continue
+                }
+
+                val matches =
+                    ScannerEngine(db).scan(
+                        symbols,
+                        config
+                    )
+
+                val status =
+                    if (matches.isEmpty()) {
+                        "VOID"
+                    } else {
+                        "ACTIVE"
+                    }
+
+                db.saveTrackingRun(
+                    savedScanId = savedScan.id,
+                    matches = matches,
+                    status = status
+                )
+
+                db.setSavedScanStatus(
+                    savedScanId = savedScan.id,
+                    status = status
+                )
+
+                trackedCount++
+                matchedCount += matches.size
+            }
+
+            showTrackingNotification(
+                applicationContext,
+                trackedCount,
+                matchedCount
+            )
+
+            Result.success(
+                Data.Builder()
+                    .putInt("tracked_scans", trackedCount)
+                    .putInt("matched_results", matchedCount)
+                    .build()
+            )
+
+        } catch (_: Exception) {
+            Result.failure()
+        }
+    }
+
+    private fun showTrackingNotification(
+        context: Context,
+        trackedCount: Int,
+        matchedCount: Int
+    ) {
+        val channelId = "scanner_tracking"
+
+        val manager =
+            context.getSystemService(
+                Context.NOTIFICATION_SERVICE
+            ) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "Scanner Tracking",
+                NotificationManager.IMPORTANCE_DEFAULT
+            )
+
+            manager.createNotificationChannel(channel)
+        }
+
+        val text =
+            "$trackedCount saved scan(s) checked, " +
+                    "$matchedCount match(es)"
+
+        val notification =
+            NotificationCompat.Builder(
+                context,
+                channelId
+            )
+                .setSmallIcon(
+                    android.R.drawable.ic_menu_info_details
+                )
+                .setContentTitle(
+                    "NSE Simple Scanner"
+                )
+                .setContentText(text)
+                .setAutoCancel(true)
+                .build()
+
+        manager.notify(
+            1001,
+            notification
+        )
     }
 }
