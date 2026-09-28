@@ -732,7 +732,205 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
 
         return null
     }
+    data class TrackingPosition(
+        val savedScanId: Long,
+        val symbol: String,
+        val timeframe: String,
+        val entryPrice: Double,
+        val currentPrice: Double?,
+        val lowestPrice: Double,
+        val pnl: Double?,
+        val maxDownside: Double,
+        val status: String,
+        val opened: String,
+        val updated: String
+    )
 
+    fun upsertTrackingPosition(
+        savedScanId: Long,
+        symbol: String,
+        timeframe: String,
+        entryPrice: Double,
+        currentPrice: Double?,
+        lowestPrice: Double,
+        pnl: Double?,
+        maxDownside: Double,
+        status: String,
+        opened: String,
+        updated: String
+    ) {
+        val cv = ContentValues()
+
+        cv.put("saved_scan_id", savedScanId)
+        cv.put("symbol", symbol)
+        cv.put("timeframe", timeframe)
+        cv.put("entry_price", entryPrice)
+
+        if (currentPrice == null) {
+            cv.putNull("current_price")
+        } else {
+            cv.put("current_price", currentPrice)
+        }
+
+        cv.put("lowest_price", lowestPrice)
+
+        if (pnl == null) {
+            cv.putNull("pnl")
+        } else {
+            cv.put("pnl", pnl)
+        }
+
+        cv.put("max_downside", maxDownside)
+        cv.put("status", status)
+        cv.put("opened", opened)
+        cv.put("updated", updated)
+
+        writableDatabase.insertWithOnConflict(
+            "tracking_positions",
+            null,
+            cv,
+            SQLiteDatabase.CONFLICT_REPLACE
+        )
+    }
+
+    fun getTrackingPositions(
+        savedScanId: Long
+    ): List<TrackingPosition> {
+
+        val out = mutableListOf<TrackingPosition>()
+
+        val c = readableDatabase.rawQuery(
+            "SELECT saved_scan_id,symbol,timeframe,entry_price," +
+                    "current_price,lowest_price,pnl,max_downside," +
+                    "status,opened,updated " +
+                    "FROM tracking_positions " +
+                    "WHERE saved_scan_id=? " +
+                    "ORDER BY symbol",
+            arrayOf(savedScanId.toString())
+        )
+
+        c.use {
+            while (it.moveToNext()) {
+                out += TrackingPosition(
+                    savedScanId = it.getLong(0),
+                    symbol = it.getString(1),
+                    timeframe = it.getString(2),
+                    entryPrice = it.getDouble(3),
+                    currentPrice =
+                        if (it.isNull(4)) null else it.getDouble(4),
+                    lowestPrice = it.getDouble(5),
+                    pnl =
+                        if (it.isNull(6)) null else it.getDouble(6),
+                    maxDownside = it.getDouble(7),
+                    status = it.getString(8),
+                    opened = it.getString(9),
+                    updated = it.getString(10)
+                )
+            }
+        }
+
+        return out
+    }
+
+    fun closeTrackingPosition(
+        savedScanId: Long,
+        symbol: String,
+        timeframe: String,
+        exitPrice: Double,
+        closed: String
+    ) {
+        val db = writableDatabase
+
+        val c = db.rawQuery(
+            "SELECT entry_price,lowest_price,max_downside,opened " +
+                    "FROM tracking_positions " +
+                    "WHERE saved_scan_id=? AND symbol=? AND timeframe=?",
+            arrayOf(
+                savedScanId.toString(),
+                symbol,
+                timeframe
+            )
+        )
+
+        c.use {
+            if (!it.moveToFirst()) {
+                return
+            }
+
+            val entryPrice = it.getDouble(0)
+            val lowestPrice = it.getDouble(1)
+            val maxDownside = it.getDouble(2)
+            val opened = it.getString(3)
+
+            val pnl =
+                if (entryPrice == 0.0) {
+                    0.0
+                } else {
+                    ((exitPrice - entryPrice) / entryPrice) * 100.0
+                }
+
+            val cv = ContentValues()
+
+            cv.put("saved_scan_id", savedScanId)
+            cv.put("symbol", symbol)
+            cv.put("timeframe", timeframe)
+            cv.put("entry_price", entryPrice)
+            cv.put("exit_price", exitPrice)
+            cv.put("pnl", pnl)
+            cv.put("lowest_price", lowestPrice)
+            cv.put("max_downside", maxDownside)
+            cv.put("opened", opened)
+            cv.put("closed", closed)
+
+            db.insert(
+                "closed_tracking_results",
+                null,
+                cv
+            )
+
+            db.delete(
+                "tracking_positions",
+                "saved_scan_id=? AND symbol=? AND timeframe=?",
+                arrayOf(
+                    savedScanId.toString(),
+                    symbol,
+                    timeframe
+                )
+            )
+        }
+    }
+
+    fun closedTrackingResults(
+        savedScanId: Long
+    ): List<String> {
+
+        val out = mutableListOf<String>()
+
+        val c = readableDatabase.rawQuery(
+            "SELECT symbol,timeframe,entry_price,exit_price," +
+                    "pnl,lowest_price,max_downside,opened,closed " +
+                    "FROM closed_tracking_results " +
+                    "WHERE saved_scan_id=? " +
+                    "ORDER BY id DESC",
+            arrayOf(savedScanId.toString())
+        )
+
+        c.use {
+            while (it.moveToNext()) {
+                out +=
+                    "${it.getString(0)}  " +
+                    "${it.getString(1)}  " +
+                    "entry=${it.getDouble(2)}  " +
+                    "exit=${it.getDouble(3)}  " +
+                    "pnl=${it.getDouble(4)}%  " +
+                    "lowest=${it.getDouble(5)}  " +
+                    "maxDown=${it.getDouble(6)}%  " +
+                    "${it.getString(7)} -> ${it.getString(8)}"
+            }
+        }
+
+        return out
+    }
     fun setSavedScanStatus(
         savedScanId: Long,
         status: String
