@@ -2174,10 +2174,9 @@ private fun formatInputNumber(
                         },
                         lp()
                     )
-
                     card.setOnClickListener {
-                        showTrackingDetails(scan.id)
-                    }
+                        // Tracking details screen will be added next.
+                    }    
 
                     root.addView(
                         card,
