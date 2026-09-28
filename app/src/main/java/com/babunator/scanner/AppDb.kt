@@ -899,6 +899,116 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
             )
         }
     }
+        data class TrackingPerformance(
+        val totalClosed: Int,
+        val profitable: Int,
+        val loss: Int,
+        val winRate: Double,
+        val avgProfit: Double,
+        val avgLoss: Double,
+        val netAvgPnl: Double,
+        val best: Double,
+        val worst: Double,
+        val avgMaxDownside: Double,
+        val neverBelowEntry: Int,
+        val neverBelowEntryPct: Double
+    )
+
+    fun getTrackingPerformance(
+        savedScanId: Long
+    ): TrackingPerformance {
+
+        val c = readableDatabase.rawQuery(
+            "SELECT " +
+                    "COUNT(*), " +
+                    "SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END), " +
+                    "SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END), " +
+                    "AVG(CASE WHEN pnl > 0 THEN pnl END), " +
+                    "AVG(CASE WHEN pnl < 0 THEN pnl END), " +
+                    "AVG(pnl), " +
+                    "MAX(pnl), " +
+                    "MIN(pnl), " +
+                    "AVG(max_downside), " +
+                    "SUM(CASE WHEN max_downside >= 0 THEN 1 ELSE 0 END) " +
+                    "FROM closed_tracking_results " +
+                    "WHERE saved_scan_id=?",
+            arrayOf(savedScanId.toString())
+        )
+
+        c.use {
+            if (it.moveToFirst()) {
+
+                val total = it.getInt(0)
+                val profitable = it.getInt(1)
+                val loss = it.getInt(2)
+
+                val avgProfit =
+                    if (it.isNull(3)) 0.0 else it.getDouble(3)
+
+                val avgLoss =
+                    if (it.isNull(4)) 0.0 else it.getDouble(4)
+
+                val netAvgPnl =
+                    if (it.isNull(5)) 0.0 else it.getDouble(5)
+
+                val best =
+                    if (it.isNull(6)) 0.0 else it.getDouble(6)
+
+                val worst =
+                    if (it.isNull(7)) 0.0 else it.getDouble(7)
+
+                val avgMaxDownside =
+                    if (it.isNull(8)) 0.0 else it.getDouble(8)
+
+                val neverBelowEntry =
+                    it.getInt(9)
+
+                val winRate =
+                    if (total == 0) {
+                        0.0
+                    } else {
+                        (profitable.toDouble() / total) * 100.0
+                    }
+
+                val neverBelowEntryPct =
+                    if (total == 0) {
+                        0.0
+                    } else {
+                        (neverBelowEntry.toDouble() / total) * 100.0
+                    }
+
+                return TrackingPerformance(
+                    totalClosed = total,
+                    profitable = profitable,
+                    loss = loss,
+                    winRate = winRate,
+                    avgProfit = avgProfit,
+                    avgLoss = avgLoss,
+                    netAvgPnl = netAvgPnl,
+                    best = best,
+                    worst = worst,
+                    avgMaxDownside = avgMaxDownside,
+                    neverBelowEntry = neverBelowEntry,
+                    neverBelowEntryPct = neverBelowEntryPct
+                )
+            }
+        }
+
+        return TrackingPerformance(
+            totalClosed = 0,
+            profitable = 0,
+            loss = 0,
+            winRate = 0.0,
+            avgProfit = 0.0,
+            avgLoss = 0.0,
+            netAvgPnl = 0.0,
+            best = 0.0,
+            worst = 0.0,
+            avgMaxDownside = 0.0,
+            neverBelowEntry = 0,
+            neverBelowEntryPct = 0.0
+        )
+    }
 
     fun closedTrackingResults(
         savedScanId: Long
