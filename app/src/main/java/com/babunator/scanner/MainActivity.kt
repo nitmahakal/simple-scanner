@@ -2166,15 +2166,19 @@ private fun formatInputNumber(
                         lp()
                     )
         
-                    card.addView(
+                                        card.addView(
                         TextView(this).apply {
-                            text = "Status: ${scan.status}"
+                     text = "Status: ${scan.status}"
                             textSize = 14f
                             setPadding(0, 4, 0, 0)
                         },
                         lp()
                     )
-        
+
+                    card.setOnClickListener {
+                        showTrackingDetails(scan.id)
+                    }
+
                     root.addView(
                         card,
                         lp()
