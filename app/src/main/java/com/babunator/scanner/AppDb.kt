@@ -5,7 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 5) {
+class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -79,9 +79,12 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 5)
                 "ALTER TABLE runs ADD COLUMN conditions TEXT NOT NULL DEFAULT ''"
             )
         }
-
         if (oldVersion < 5) {
             createSavedScanTables(db)
+        }
+
+        if (oldVersion < 6) {
+            createTrackingPerformanceTables(db)
         }
     }
 
@@ -134,7 +137,39 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 5)
                     "updated TEXT NOT NULL)"
         )
     }
+    private fun createTrackingPerformanceTables(db: SQLiteDatabase) {
 
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS tracking_positions(" +
+                    "saved_scan_id INTEGER NOT NULL, " +
+                    "symbol TEXT NOT NULL, " +
+                    "timeframe TEXT NOT NULL, " +
+                    "entry_price REAL NOT NULL, " +
+                    "current_price REAL, " +
+                    "lowest_price REAL NOT NULL, " +
+                    "pnl REAL, " +
+                    "max_downside REAL NOT NULL DEFAULT 0, " +
+                    "status TEXT NOT NULL DEFAULT 'OPEN', " +
+                    "opened TEXT NOT NULL, " +
+                    "updated TEXT NOT NULL, " +
+                    "PRIMARY KEY(saved_scan_id,symbol,timeframe))"
+        )
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS closed_tracking_results(" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    "saved_scan_id INTEGER NOT NULL, " +
+                    "symbol TEXT NOT NULL, " +
+                    "timeframe TEXT NOT NULL, " +
+                    "entry_price REAL NOT NULL, " +
+                    "exit_price REAL NOT NULL, " +
+                    "pnl REAL NOT NULL, " +
+                    "lowest_price REAL NOT NULL, " +
+                    "max_downside REAL NOT NULL, " +
+                    "opened TEXT NOT NULL, " +
+                    "closed TEXT NOT NULL)"
+        )
+    }
     fun upsertPrices(symbol: String, rows: List<Candle>) {
         writableDatabase.beginTransaction()
         try {
