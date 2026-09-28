@@ -1364,20 +1364,88 @@ root.addView(
         scanButton,
         lp()
     )
-
+    
     val saveButton =
-        Button(this).apply {
-            text = "SAVE SCAN"
-            styleButton(this)
+    Button(this).apply {
+        text = "SAVE SCAN"
+        styleButton(this)
 
-            setOnClickListener {
+        setOnClickListener {
+
+            val db = AppDb(this@MainActivity)
+
+            val latestRun =
+                db.recentRuns(1)
+                    .firstOrNull()
+
+            if (latestRun == null) {
                 Toast.makeText(
                     this@MainActivity,
-                    "Save Scan will be connected in the Saved Scans step.",
+                    "Run a scan first.",
                     Toast.LENGTH_SHORT
                 ).show()
+
+                return@setOnClickListener
             }
+
+            val runId =
+                latestRun
+                    .substringAfter("#")
+                    .substringBefore(" ")
+                    .toLongOrNull()
+
+            if (runId == null) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Scan result could not be read.",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                return@setOnClickListener
+            }
+
+            val config =
+                ScanConfigStore.load(
+                    this@MainActivity
+                )
+
+            val matches =
+                db.resultMatches(runId)
+
+            if (matches.isEmpty()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "This scan has no matched stocks.",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                return@setOnClickListener
+            }
+
+            val savedId =
+                db.saveSavedScan(
+                    configJson =
+                        ScanConfigStore.toJson(config),
+                    timeframe =
+                        config.timeframes
+                            .ifEmpty {
+                                listOf(config.timeframe)
+                            }
+                            .joinToString(", "),
+                    conditions =
+                        db.runConditions(runId),
+                    matches =
+                        matches,
+                    autoTrack = false
+                )
+
+            Toast.makeText(
+                this@MainActivity,
+                "Scan #$savedId saved.",
+                Toast.LENGTH_SHORT
+            ).show()
         }
+    }
 
     root.addView(
         saveButton,
