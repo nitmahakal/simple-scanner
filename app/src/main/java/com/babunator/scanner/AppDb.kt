@@ -300,6 +300,28 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 5)
         return out
     }
 
+    fun resultMatches(runId: Long): List<Match> {
+        val out = mutableListOf<Match>()
+    
+        val c = readableDatabase.rawQuery(
+            "SELECT symbol,timeframe,close,note " +
+                    "FROM results WHERE run_id=? ORDER BY symbol",
+            arrayOf(runId.toString())
+        )
+    
+        c.use {
+            while (it.moveToNext()) {
+                out += Match(
+                    symbol = it.getString(0),
+                    timeframe = it.getString(1),
+                    close = it.getDouble(2),
+                    note = it.getString(3) ?: ""
+                )
+            }
+        }
+    
+        return out
+    }
     data class UpdateStatus(
         val total: Int,
         val processed: Int,
