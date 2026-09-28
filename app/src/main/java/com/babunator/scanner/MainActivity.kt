@@ -1904,97 +1904,188 @@ private fun formatInputNumber(
     // ---------------------------------------------------------
     // SCREEN 3 : SAVED SCANS / TRACKING
     // ---------------------------------------------------------
-private fun showSavedScreen() {
-    updateMonitorJob?.cancel()
-    scanMonitorJob?.cancel()
-    content.removeAllViews()
-
-    val root = verticalScroll()
-
-    setActiveNavigation(savedNavButton)
-
-    root.addView(
-        TextView(this).apply {
-            text = "SAVED SCANS & TRACKING"
-            textSize = 22f
-            setPadding(0, 8, 0, 14)
-        },
-        lp()
-    )
-
-    val db = AppDb(this)
-    val runs = db.recentRuns()
-
-    val savedCard = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(18, 18, 18, 18)
-        background = cardBackground()
-    }
-
-    savedCard.addView(
-        TextView(this).apply {
-            text = "SAVED SCANS"
-            textSize = 18f
-        },
-        lp()
-    )
-
-        savedCard.addView(
-        Button(this).apply {
-            text =
-                if (runs.isEmpty()) {
-                    "VIEW SCAN HISTORY ▼"
-                } else {
-                    "VIEW SCAN HISTORY (${runs.size}) ▼"
-                }
-
-            styleButton(this)
-
-            setOnClickListener {
-                showHistory()
+        private fun showSavedScreen() {
+            updateMonitorJob?.cancel()
+            scanMonitorJob?.cancel()
+            content.removeAllViews()
+        
+            val root = verticalScroll()
+        
+            setActiveNavigation(savedNavButton)
+        
+            root.addView(
+                TextView(this).apply {
+                    text = "SAVED / TRACKING"
+                    textSize = 22f
+                    setPadding(0, 8, 0, 14)
+                },
+                lp()
+            )
+        
+            val db = AppDb(this)
+            val savedScans = db.getSavedScans()
+            val historyRuns = db.recentRuns()
+        
+            // 1. SCAN HISTORY
+            val historyCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(18, 18, 18, 18)
+                background = cardBackground()
             }
-        },
-        lp()
-    )
+        
+            historyCard.addView(
+                TextView(this).apply {
+                    text = "SCAN HISTORY"
+                    textSize = 18f
+                },
+                lp()
+            )
+        
+            historyCard.addView(
+                TextView(this).apply {
+                    text =
+                        if (historyRuns.isEmpty()) {
+                            "No normal scans yet."
+                        } else {
+                            "${historyRuns.size} normal scan(s) stored."
+                        }
+                    textSize = 14f
+                    setPadding(0, 8, 0, 8)
+                },
+                lp()
+            )
+        
+            historyCard.addView(
+                Button(this).apply {
+                    text = "VIEW SCAN HISTORY"
+                    styleButton(this)
+        
+                    setOnClickListener {
+                        showHistory()
+                    }
+                },
+                lp()
+            )
+        
+            root.addView(
+                historyCard,
+                lp()
+            )
+        
+            // 2. USER TRACK SCANS
+            val userTrackScans =
+                savedScans.filter {
+                    !it.autoTrack
+                }
+        
+            val userTrackCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(18, 18, 18, 18)
+                background = cardBackground()
+            }
+        
+            userTrackCard.addView(
+                TextView(this).apply {
+                    text = "USER TRACK SCANS"
+                    textSize = 18f
+                },
+                lp()
+            )
+        
+            userTrackCard.addView(
+                TextView(this).apply {
+                    text =
+                        if (userTrackScans.isEmpty()) {
+                            "No scans selected for tracking."
+                        } else {
+                            "${userTrackScans.size} scan(s) selected by you."
+                        }
+                    textSize = 14f
+                    setPadding(0, 8, 0, 8)
+                },
+                lp()
+            )
+        
+            userTrackCard.addView(
+                Button(this).apply {
+                    text = "VIEW USER TRACK SCANS"
+                    styleButton(this)
+        
+                    setOnClickListener {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "User Track Scan list will be added next.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                lp()
+            )
+        
+            root.addView(
+                userTrackCard,
+                lp()
+            )
+        
+            // 3. AUTO TRACKING
+            val autoTrackScans =
+                savedScans.filter {
+                    it.autoTrack
+                }
+        
+            val autoTrackCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(18, 18, 18, 18)
+                background = cardBackground()
+            }
+        
+            autoTrackCard.addView(
+                TextView(this).apply {
+                    text = "AUTO TRACKING"
+                    textSize = 18f
+                },
+                lp()
+            )
+        
+            autoTrackCard.addView(
+                TextView(this).apply {
+                    text =
+                        if (autoTrackScans.isEmpty()) {
+                            "No scans are under automatic tracking."
+                        } else {
+                            "${autoTrackScans.size} scan(s) under auto tracking."
+                        }
+                    textSize = 14f
+                    setPadding(0, 8, 0, 8)
+                },
+                lp()
+            )
+        
+            autoTrackCard.addView(
+                Button(this).apply {
+                    text = "VIEW AUTO TRACKING"
+                    styleButton(this)
+        
+                    setOnClickListener {
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Auto Tracking list will be added next.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                lp()
+            )
+        
+            root.addView(
+                autoTrackCard,
+                lp()
+            )
+        
+            content.addView(root)
+        }    
 
-    root.addView(
-        savedCard,
-        lp()
-    )
-
-    val trackingCard = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(18, 18, 18, 18)
-        background = cardBackground()
-    }
-
-    trackingCard.addView(
-        TextView(this).apply {
-            text = "TRACKING"
-            textSize = 18f
-        },
-        lp()
-    )
-
-    trackingCard.addView(
-        TextView(this).apply {
-            text =
-                "Saved scan tracking will show Valid / Void status, " +
-                "entry price, current price and P&L when tracking data is available."
-            textSize = 15f
-            setPadding(0, 8, 0, 0)
-        },
-        lp()
-    )
-
-    root.addView(
-        trackingCard,
-        lp()
-    )
-
-    content.addView(root)
-}
-
+    
     // ---------------------------------------------------------
     // SETTINGS / THEME
     // ---------------------------------------------------------
