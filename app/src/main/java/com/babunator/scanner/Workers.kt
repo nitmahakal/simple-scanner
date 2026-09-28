@@ -325,8 +325,14 @@ class AutoTrackingWorker(
                     matches = matches,
                     status = status
                 )
-
+                
                 updateOpenTrackingPositions(
+                    db = db,
+                    savedScanId = savedScan.id,
+                    matches = matches
+                )
+
+                closeMissingTrackingPositions(
                     db = db,
                     savedScanId = savedScan.id,
                     matches = matches
@@ -436,6 +442,49 @@ class AutoTrackingWorker(
                     updated = now
                 )
             }
+        }
+    }
+    private fun closeMissingTrackingPositions(
+        db: AppDb,
+        savedScanId: Long,
+        matches: List<Match>
+    ) {
+        val now = LocalDateTime.now().toString()
+
+        val currentKeys =
+            matches
+                .map {
+                    "${it.symbol}|${it.timeframe}"
+                }
+                .toSet()
+
+        val existing =
+            db.getTrackingPositions(savedScanId)
+
+        existing.forEach { position ->
+
+            val key =
+                "${position.symbol}|${position.timeframe}"
+
+            if (key in currentKeys) {
+                return@forEach
+            }
+
+            val history =
+                db.getHistory(position.symbol)
+
+            val exitPrice =
+                history.lastOrNull()?.close
+                    ?: position.currentPrice
+                    ?: position.entryPrice
+
+            db.closeTrackingPosition(
+                savedScanId = savedScanId,
+                symbol = position.symbol,
+                timeframe = position.timeframe,
+                exitPrice = exitPrice,
+                closed = now
+            )
         }
     }
 
