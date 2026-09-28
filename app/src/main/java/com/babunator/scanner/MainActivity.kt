@@ -2010,13 +2010,8 @@ private fun formatInputNumber(
                 Button(this).apply {
                     text = "VIEW USER TRACK SCANS"
                     styleButton(this)
-        
                     setOnClickListener {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "User Track Scan list will be added next.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        showSavedScanList(false)
                     }
                 },
                 lp()
@@ -2067,11 +2062,7 @@ private fun formatInputNumber(
                     styleButton(this)
         
                     setOnClickListener {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Auto Tracking list will be added next.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        showSavedScanList(true)
                     }
                 },
                 lp()
@@ -2085,6 +2076,126 @@ private fun formatInputNumber(
             content.addView(root)
         }    
 
+        private fun showSavedScanList(autoTrack: Boolean) {
+        
+            updateMonitorJob?.cancel()
+            scanMonitorJob?.cancel()
+            content.removeAllViews()
+        
+            setActiveNavigation(savedNavButton)
+        
+            val root = verticalScroll()
+        
+            val db = AppDb(this)
+        
+            val scans =
+                db.getSavedScans().filter {
+                    it.autoTrack == autoTrack
+                }
+        
+            root.addView(
+                TextView(this).apply {
+                    text =
+                        if (autoTrack) {
+                            "AUTO TRACKING"
+                        } else {
+                            "USER TRACK SCANS"
+                        }
+        
+                    textSize = 22f
+                    setPadding(0, 8, 0, 14)
+                },
+                lp()
+            )
+        
+            if (scans.isEmpty()) {
+        
+                root.addView(
+                    TextView(this).apply {
+                        text =
+                            if (autoTrack) {
+                                "No scans are under automatic tracking."
+                            } else {
+                                "No scans selected for tracking."
+                            }
+        
+                        textSize = 15f
+                        setPadding(0, 8, 0, 16)
+                    },
+                    lp()
+                )
+        
+            } else {
+        
+                scans.forEach { scan ->
+        
+                    val card =
+                        LinearLayout(this).apply {
+                            orientation = LinearLayout.VERTICAL
+                            setPadding(18, 18, 18, 18)
+                            background = cardBackground()
+                        }
+        
+                    card.addView(
+                        TextView(this).apply {
+                            text = "SCAN #${scan.id}"
+                            textSize = 17f
+                            setTypeface(
+                                typeface,
+                                android.graphics.Typeface.BOLD
+                            )
+                        },
+                        lp()
+                    )
+        
+                    card.addView(
+                        TextView(this).apply {
+                            text = "Created: ${scan.created}"
+                            textSize = 14f
+                            setPadding(0, 6, 0, 0)
+                        },
+                        lp()
+                    )
+        
+                    card.addView(
+                        TextView(this).apply {
+                            text = "Timeframe: ${scan.timeframe}"
+                            textSize = 14f
+                            setPadding(0, 4, 0, 0)
+                        },
+                        lp()
+                    )
+        
+                    card.addView(
+                        TextView(this).apply {
+                            text = "Status: ${scan.status}"
+                            textSize = 14f
+                            setPadding(0, 4, 0, 0)
+                        },
+                        lp()
+                    )
+        
+                    root.addView(
+                        card,
+                        lp()
+                    )
+                }
+            }
+        
+            root.addView(
+                Button(this).apply {
+                    text = "← BACK TO SAVED / TRACKING"
+                    styleButton(this)
+        
+                    setOnClickListener {
+                        showSavedScreen()
+                    }
+                },
+                lp()
+            )
+        
+            content.addView(root)
+        }
     
     // ---------------------------------------------------------
     // SETTINGS / THEME
