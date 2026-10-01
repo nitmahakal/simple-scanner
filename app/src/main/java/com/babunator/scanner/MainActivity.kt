@@ -2644,6 +2644,95 @@ private fun formatInputNumber(
 
                 dialog.dismiss()
             }
+            .setPositiveButton("SCAN RETENTION") { _, _ ->
+                showScanRetentionSettings()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showScanRetentionSettings() {
+        val prefs = getSharedPreferences(
+            "app_settings",
+            MODE_PRIVATE
+        )
+
+        val autoDelete =
+            prefs.getBoolean("auto_delete_scans", true)
+
+        val days =
+            prefs.getInt("scan_retention_days", 7)
+
+        val options = arrayOf(
+            "Auto delete: ON",
+            "Auto delete: OFF"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Scan Retention")
+            .setSingleChoiceItems(
+                options,
+                if (autoDelete) 0 else 1
+            ) { dialog, which ->
+
+                prefs.edit()
+                    .putBoolean(
+                        "auto_delete_scans",
+                        which == 0
+                    )
+                    .apply()
+
+                dialog.dismiss()
+
+                if (which == 0) {
+                    showRetentionDaysDialog()
+                }
+            }
+            .setPositiveButton("SET DAYS") { _, _ ->
+                showRetentionDaysDialog()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showRetentionDaysDialog() {
+        val prefs = getSharedPreferences(
+            "app_settings",
+            MODE_PRIVATE
+        )
+
+        val field = EditText(this).apply {
+            inputType =
+                InputType.TYPE_CLASS_NUMBER
+
+            setText(
+                prefs.getInt(
+                    "scan_retention_days",
+                    7
+                ).toString()
+            )
+
+            selectAll()
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Normal Scan Retention (Days)")
+            .setView(field)
+            .setPositiveButton("SAVE") { _, _ ->
+
+                val value =
+                    field.text.toString()
+                        .toIntOrNull()
+                        ?.coerceAtLeast(1)
+                        ?: 7
+
+                prefs.edit()
+                    .putInt(
+                        "scan_retention_days",
+                        value
+                    )
+                    .apply()
+            }
             .setNegativeButton("Cancel", null)
             .show()
     }
