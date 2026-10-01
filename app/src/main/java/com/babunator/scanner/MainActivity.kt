@@ -1641,17 +1641,42 @@ private fun showScanResultScreen(runId: Long) {
 
     } else {
 
+        val horizontalScroll =
+            HorizontalScrollView(this).apply {
+                isFillViewport = false
+            }
+
+        val resultContainer =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, 0, 0, 16)
+            }
+
         results.forEach { result ->
 
-            root.addView(
+            resultContainer.addView(
                 TextView(this).apply {
                     text = result
                     textSize = 14f
-                    setPadding(0, 6, 0, 6)
+                    setPadding(14, 10, 14, 10)
+                    setSingleLine(false)
                 },
-                lp()
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             )
         }
+
+        horizontalScroll.addView(resultContainer)
+
+        root.addView(
+            horizontalScroll,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
     }
 
     root.addView(
