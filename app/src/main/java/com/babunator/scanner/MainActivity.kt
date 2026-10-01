@@ -73,10 +73,29 @@ class MainActivity : AppCompatActivity() {
 
     private var updateMonitorJob: Job? = null
     private var scanMonitorJob: Job? = null
-    
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
+
+        val retentionPrefs =
+            getSharedPreferences(
+                "app_settings",
+                MODE_PRIVATE
+            )
+
+        if (
+            retentionPrefs.getBoolean(
+                "auto_delete_scans",
+                true
+            )
+        ) {
+            AppDb(this).deleteOldNormalScans(
+                retentionPrefs.getInt(
+                    "scan_retention_days",
+                    7
+                )
+            )
+        }
 
         buildMainLayout()
         showUpdateScreen()
