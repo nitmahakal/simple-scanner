@@ -9,7 +9,7 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
+import androidx.appcompat.app.AppCompatDelegate 
 import java.util.Locale
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -2318,8 +2318,8 @@ private fun formatInputNumber(
                         lp()
                     )
                     card.setOnClickListener {
-                        // Tracking details screen will be added next.
-                    }    
+                        showTrackingDetails(scan.id)
+                    }
 
                     root.addView(
                         card,
@@ -2342,7 +2342,270 @@ private fun formatInputNumber(
         
             content.addView(root)
         }
-    
+    private fun showTrackingDetails(
+        savedScanId: Long
+    ) {
+        updateMonitorJob?.cancel()
+        scanMonitorJob?.cancel()
+        content.removeAllViews()
+
+        setActiveNavigation(savedNavButton)
+
+        val root = verticalScroll()
+        val db = AppDb(this)
+
+        val scan = db.getSavedScan(savedScanId)
+
+        root.addView(
+            TextView(this).apply {
+                text = "SCAN #$savedScanId"
+                textSize = 22f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 8, 0, 14)
+            },
+            lp()
+        )
+
+        if (scan != null) {
+
+            root.addView(
+                TextView(this).apply {
+                    text =
+                        "Created: ${scan.created}\n" +
+                        "Timeframe: ${scan.timeframe}\n" +
+                        "Status: ${scan.status}"
+                    textSize = 14f
+                    setPadding(0, 0, 0, 14)
+                },
+                lp()
+            )
+
+            root.addView(
+                TextView(this).apply {
+                    text =
+                        "CONDITIONS\n\n" +
+                        scan.conditions.ifBlank {
+                            "Condition details not available."
+                        }
+                    textSize = 14f
+                    setPadding(0, 0, 0, 14)
+                },
+                lp()
+            )
+        }
+
+        val openPositions =
+            db.getTrackingPositions(savedScanId)
+
+        root.addView(
+            TextView(this).apply {
+                text = "OPEN TRACKING"
+                textSize = 18f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 8, 0, 8)
+            },
+            lp()
+        )
+
+        if (openPositions.isEmpty()) {
+
+            root.addView(
+                TextView(this).apply {
+                    text = "No open positions."
+                    textSize = 14f
+                    setPadding(0, 0, 0, 12)
+                },
+                lp()
+            )
+
+        } else {
+
+            openPositions.forEach { position ->
+
+                val current =
+                    position.currentPrice
+                        ?: position.entryPrice
+
+                val pnl =
+                    position.pnl ?: 0.0
+
+                root.addView(
+                    TextView(this).apply {
+                        text =
+                            "${position.symbol} / " +
+                            "${position.timeframe}\n" +
+                            "Entry: " +
+                            String.format(
+                                Locale.US,
+                                "%.2f",
+                                position.entryPrice
+                            ) +
+                            "\nCurrent: " +
+                            String.format(
+                                Locale.US,
+                                "%.2f",
+                                current
+                            ) +
+                            "\nP&L: " +
+                            String.format(
+                                Locale.US,
+                                "%.2f%%",
+                                pnl
+                            ) +
+                            "\nLowest: " +
+                            String.format(
+                                Locale.US,
+                                "%.2f",
+                                position.lowestPrice
+                            ) +
+                            "\nMax downside: " +
+                            String.format(
+                                Locale.US,
+                                "%.2f%%",
+                                position.maxDownside
+                            ) +
+                            "\nOpened: ${position.opened}"
+                        textSize = 14f
+                        setPadding(0, 6, 0, 12)
+                    },
+                    lp()
+                )
+            }
+        }
+
+        val performance =
+            db.getTrackingPerformance(savedScanId)
+
+        root.addView(
+            TextView(this).apply {
+                text = "CLOSED PERFORMANCE"
+                textSize = 18f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 14, 0, 8)
+            },
+            lp()
+        )
+
+        root.addView(
+            TextView(this).apply {
+                text =
+                    "Closed: ${performance.totalClosed}\n" +
+                    "Profit: ${performance.profitable}\n" +
+                    "Loss: ${performance.loss}\n" +
+                    "Win rate: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.winRate
+                    ) +
+                    "\nAvg profit: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.avgProfit
+                    ) +
+                    "\nAvg loss: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.avgLoss
+                    ) +
+                    "\nNet avg P&L: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.netAvgPnl
+                    ) +
+                    "\nBest: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.best
+                    ) +
+                    "\nWorst: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.worst
+                    ) +
+                    "\nAvg max downside: " +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.avgMaxDownside
+                    ) +
+                    "\nNever below entry: " +
+                    "${performance.neverBelowEntry} / " +
+                    "${performance.totalClosed} (" +
+                    String.format(
+                        Locale.US,
+                        "%.2f%%",
+                        performance.neverBelowEntryPct
+                    ) +
+                    ")"
+                textSize = 14f
+                setPadding(0, 0, 0, 14)
+            },
+            lp()
+        )
+
+        root.addView(
+            TextView(this).apply {
+                text = "CLOSED RESULTS"
+                textSize = 18f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 8, 0, 8)
+            },
+            lp()
+        )
+
+        val closed =
+            db.closedTrackingResults(savedScanId)
+
+        root.addView(
+            TextView(this).apply {
+                text =
+                    if (closed.isEmpty()) {
+                        "No closed positions yet."
+                    } else {
+                        closed.joinToString("\n\n")
+                    }
+
+                textSize = 14f
+                setPadding(0, 0, 0, 16)
+            },
+            lp()
+        )
+
+        root.addView(
+            Button(this).apply {
+                text = "← BACK TO TRACKING"
+                styleButton(this)
+
+                setOnClickListener {
+                    showSavedScanList(
+                        scan?.autoTrack ?: false
+                    )
+                }
+            },
+            lp()
+        )
+
+        content.addView(root)
+    }
+
     // ---------------------------------------------------------
     // SETTINGS / THEME
     // ---------------------------------------------------------
