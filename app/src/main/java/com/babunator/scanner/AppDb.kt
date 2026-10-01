@@ -281,6 +281,36 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
 
         return id
     }
+    fun deleteOldNormalScans(days: Int) {
+        if (days < 1) return
+
+        val db = writableDatabase
+
+        db.beginTransaction()
+
+        try {
+            db.delete(
+                "results",
+                "run_id IN (" +
+                        "SELECT id FROM runs " +
+                        "WHERE julianday(replace(created,'T',' ')) < " +
+                        "julianday('now', '-' || ? || ' days')" +
+                        ")",
+                arrayOf(days.toString())
+            )
+
+            db.delete(
+                "runs",
+                "julianday(replace(created,'T',' ')) < " +
+                        "julianday('now', '-' || ? || ' days')",
+                arrayOf(days.toString())
+            )
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
 
     fun recentRuns(limit: Int = 30): List<String> {
         val out = mutableListOf<String>()
