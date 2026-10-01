@@ -1639,6 +1639,19 @@ private fun showScanResultScreen(runId: Long) {
 
     root.addView(
         TextView(this).apply {
+            text = "Results"
+            textSize = 16f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 0, 0, 8)
+        },
+        lp()
+    )    
+
+    root.addView(
+        TextView(this).apply {
             text = db.runConditions(runId)
             textSize = 14f
             setPadding(0, 0, 0, 14)
