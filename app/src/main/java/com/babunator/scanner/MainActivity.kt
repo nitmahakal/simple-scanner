@@ -1614,9 +1614,23 @@ private fun showScanResultScreen(runId: Long) {
         lp()
     )
 
-    root.addView(
+        root.addView(
         TextView(this).apply {
             text = runHeader ?: "#$runId"
+            textSize = 14f
+            setPadding(0, 0, 0, 12)
+        },
+        lp()
+    )
+
+    val config = ScanConfigStore.load(this)
+
+    root.addView(
+        TextView(this).apply {
+            text = "Timeframes: " +
+                    config.timeframes
+                        .ifEmpty { listOf(config.timeframe) }
+                        .joinToString(", ")
             textSize = 14f
             setPadding(0, 0, 0, 12)
         },
