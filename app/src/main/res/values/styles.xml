@@ -2,14 +2,15 @@
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:fontFamily">sans</item>
 
-        <item name="android:windowBackground">#F4F6F5</item>
-        <item name="android:colorBackground">#F4F6F5</item>
+        <item name="android:windowBackground">#F3F4F6</item>
+        <item name="android:colorBackground">#F3F4F6</item>
 
-        <item name="android:textColorPrimary">#172019</item>
-        <item name="android:textColorSecondary">#4B5A50</item>
+        <item name="android:textColorPrimary">#1B4332</item>
+        <item name="android:textColorSecondary">#1B4332</item>
 
-        <item name="android:colorAccent">#2E8B57</item>
+        <item name="android:colorAccent">#50C878</item>
+        <item name="colorAccent">#50C878</item>
 
-        <item name="android:navigationBarColor">#F4F6F5</item>
+        <item name="android:navigationBarColor">#F3F4F6</item>
     </style>
 </resources>
