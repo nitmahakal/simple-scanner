@@ -1626,9 +1626,9 @@ private fun showScanResultScreen(runId: Long) {
         lp()
     )
 
-    val results = db.results(runId)
+    val matches = db.resultMatches(runId)
 
-    if (results.isEmpty()) {
+    if (matches.isEmpty()) {
 
         root.addView(
             TextView(this).apply {
@@ -1641,52 +1641,152 @@ private fun showScanResultScreen(runId: Long) {
 
     } else {
 
+        val indicatorNames =
+            linkedSetOf<String>()
+
+        val parsedRows =
+            matches.map { match ->
+
+                val values =
+                    linkedMapOf<String, String>()
+
+                match.note
+                    .substringAfter("\n\n", "")
+                    .lines()
+                    .forEach { line ->
+
+                        if (line.startsWith("Close:")) {
+                            return@forEach
+                        }
+
+                        val separator =
+                            line.indexOf(": ")
+
+                        if (separator > 0) {
+
+                            val name =
+                                line.substring(
+                                    0,
+                                    separator
+                                )
+
+                            val value =
+                                line.substring(
+                                    separator + 2
+                                )
+
+                            values[name] = value
+                            indicatorNames.add(name)
+                        }
+                    }
+
+                match to values
+            }
+
+        val columns =
+            mutableListOf<String>().apply {
+                add("STOCK")
+                add("TIMEFRAME")
+                add("LTP")
+                addAll(indicatorNames)
+            }
+
         val horizontalScroll =
             HorizontalScrollView(this).apply {
                 isFillViewport = false
             }
 
-        val resultContainer =
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
+        val table =
+            TableLayout(this).apply {
+                isStretchAllColumns = false
+                isShrinkAllColumns = false
                 setPadding(0, 0, 0, 16)
             }
 
-                val header = TextView(this).apply {
-            text = "STOCK / TIMEFRAME / LTP / INDICATOR VALUES"
-            textSize = 14f
-            setTypeface(
-                typeface,
-                android.graphics.Typeface.BOLD
-            )
-            setPadding(14, 10, 14, 10)
+        fun cell(
+            value: String,
+            header: Boolean = false
+        ): TextView {
+
+            return TextView(this).apply {
+
+                text = value
+                textSize = if (header) 13f else 14f
+
+                if (header) {
+                    setTypeface(
+                        typeface,
+                        android.graphics.Typeface.BOLD
+                    )
+                }
+
+                setPadding(
+                    18,
+                    12,
+                    18,
+                    12
+                )
+
+                setSingleLine(true)
+
+                layoutParams =
+                    TableRow.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
+            }
         }
 
-        resultContainer.addView(
-            header,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        val headerRow =
+            TableRow(this)
 
-        results.forEach { result ->
-
-            resultContainer.addView(
-                TextView(this).apply {
-                    text = result
-                    textSize = 14f
-                    setPadding(14, 10, 14, 10)
-                    setSingleLine(false)
-                },
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
+        columns.forEach { column ->
+            headerRow.addView(
+                cell(
+                    column,
+                    true
                 )
             )
         }
 
-        horizontalScroll.addView(resultContainer)
+        table.addView(headerRow)
+
+        parsedRows.forEach { (match, values) ->
+
+            val row =
+                TableRow(this)
+
+            row.addView(
+                cell(match.symbol)
+            )
+
+            row.addView(
+                cell(match.timeframe)
+            )
+
+            row.addView(
+                cell(
+                    String.format(
+                        Locale.US,
+                        "%.2f",
+                        match.close
+                    )
+                )
+            )
+
+            indicatorNames.forEach { name ->
+
+                row.addView(
+                    cell(
+                        values[name] ?: "—"
+                    )
+                )
+            }
+
+            table.addView(row)
+        }
+
+        horizontalScroll.addView(table)
 
         root.addView(
             horizontalScroll,
