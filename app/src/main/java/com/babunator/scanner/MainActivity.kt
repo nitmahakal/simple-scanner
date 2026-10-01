@@ -1652,6 +1652,24 @@ private fun showScanResultScreen(runId: Long) {
                 setPadding(0, 0, 0, 16)
             }
 
+                val header = TextView(this).apply {
+            text = "STOCK / TIMEFRAME / LTP / INDICATOR VALUES"
+            textSize = 14f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(14, 10, 14, 10)
+        }
+
+        resultContainer.addView(
+            header,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+
         results.forEach { result ->
 
             resultContainer.addView(
