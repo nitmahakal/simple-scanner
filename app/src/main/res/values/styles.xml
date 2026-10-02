@@ -12,5 +12,8 @@
         <item name="colorAccent">#50C878</item>
 
         <item name="android:navigationBarColor">#F3F4F6</item>
+
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F3F4F6</item>
     </style>
 </resources>
