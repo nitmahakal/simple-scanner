@@ -2497,6 +2497,46 @@ private fun formatInputNumber(
             )
         }
 
+        if (scan != null) {
+
+            root.addView(
+                Button(this).apply {
+                    text =
+                        if (scan.autoTrack) {
+                            "DISABLE AUTO TRACKING"
+                        } else {
+                            "ENABLE AUTO TRACKING"
+                        }
+
+                    styleButton(this)
+
+                    setOnClickListener {
+
+                        val newValue =
+                            !scan.autoTrack
+
+                        db.setSavedScanAutoTrack(
+                            savedScanId,
+                            newValue
+                        )
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            if (newValue) {
+                                "Auto tracking enabled."
+                            } else {
+                                "Auto tracking disabled."
+                            },
+                            Toast.LENGTH_SHORT
+                        ).show()
+
+                        showTrackingDetails(savedScanId)
+                    }
+                },
+                lp()
+            )
+        }
+
         val openPositions =
             db.getTrackingPositions(savedScanId)
 
