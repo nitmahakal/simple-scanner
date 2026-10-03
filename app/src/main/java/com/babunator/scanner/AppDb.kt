@@ -1118,6 +1118,18 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
             )
 
             db.delete(
+                "tracking_positions",
+                "saved_scan_id=?",
+                arrayOf(savedScanId.toString())
+            )
+
+            db.delete(
+                "closed_tracking_results",
+                "saved_scan_id=?",
+                arrayOf(savedScanId.toString())
+            )
+
+            db.delete(
                 "saved_scans",
                 "id=?",
                 arrayOf(savedScanId.toString())
