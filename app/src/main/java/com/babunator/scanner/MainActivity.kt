@@ -1847,7 +1847,56 @@ private fun showScanResultScreen(runId: Long) {
             )
         )
     }
+    root.addView(
+        Button(this).apply {
+            text = "TRACK THIS SCAN"
+            styleButton(this)
 
+            setOnClickListener {
+
+                val config =
+                    ScanConfigStore.load(
+                        this@MainActivity
+                    )
+
+                val matches =
+                    db.resultMatches(runId)
+
+                if (matches.isEmpty()) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "This scan has no matched stocks.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    return@setOnClickListener
+                }
+
+                db.saveSavedScan(
+                    configJson =
+                        ScanConfigStore.toJson(config),
+                    timeframe =
+                        config.timeframes
+                            .ifEmpty {
+                                listOf(config.timeframe)
+                            }
+                            .joinToString(", "),
+                    conditions =
+                        db.runConditions(runId),
+                    matches =
+                        matches,
+                    autoTrack = false
+                )
+
+                Toast.makeText(
+                    this@MainActivity,
+                    "Scan added to User Track Scans.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        },
+        lp()
+    )
     root.addView(
         Button(this).apply {
             text = "← BACK TO SCANNER"
