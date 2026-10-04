@@ -3420,7 +3420,7 @@ private fun validateConditions(
         
             var rightTarget: Double = 0.0,
         
-            var rangePct: Double = 1.0
+            var rangePct: Double = 1.0,
             var logic: String = "AND"
         ) {
         
