@@ -56,6 +56,7 @@ object ScanConfigStore {
                 e.remove("rp$i")
                 e.remove("rt$i")
                 e.remove("rg$i")
+                e.remove("logic$i")
             }
         }
 
@@ -96,6 +97,11 @@ object ScanConfigStore {
             e.putString(
                 "rg$i",
                 c.rangePct.toString()
+            )
+            
+            e.putString(
+                "logic$i",
+                c.logic
             )
         }
 
@@ -212,7 +218,15 @@ object ScanConfigStore {
                     rightIndicator = ri,
                     rightParams = rp,
                     rightTarget = rightTarget,
-                    rangePct = rangePct
+                    rangePct = rangePct,
+                    logic =
+                        sp.getString(
+                            "logic$i",
+                            sp.getString(
+                                "logic",
+                                "AND"
+                            ) ?: "AND"
+                        ) ?: "AND"
                 )
             }
 
@@ -298,6 +312,11 @@ object ScanConfigStore {
             condition.put(
                 "rangePct",
                 c.rangePct
+            )
+            
+            condition.put(
+                "logic",
+                c.logic
             )
 
             conditions.put(condition)
@@ -387,6 +406,14 @@ object ScanConfigStore {
                         item.optDouble(
                             "rangePct",
                             1.0
+                        ),
+                    logic =
+                        item.optString(
+                            "logic",
+                            root.optString(
+                                "logic",
+                                "AND"
+                            )
                         )
                 )
             }
