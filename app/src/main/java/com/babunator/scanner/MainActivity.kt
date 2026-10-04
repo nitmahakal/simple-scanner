@@ -721,8 +721,6 @@ root.addView(
     timeframeButton,
     lp()
 )
-    val logicHolder =
-        arrayOf("AND")
 
     val conditionEditor =
         LinearLayout(this).apply {
@@ -748,8 +746,8 @@ root.addView(
 
             conditionEditor.addView(
                 TextView(this).apply {
-                    text =
-                        "Logic: ${logicHolder[0]} between conditions"
+                        text =
+                            "Logic: ${row.logic} between conditions"
                     textSize = 13f
                     setPadding(0, 0, 0, 10)
                 },
@@ -1255,17 +1253,18 @@ root.addView(
                                 )
                             ) { _, which ->
 
-                                logicHolder[0] =
+                                val logicForNext =
                                     if (which == 0) {
                                         "AND"
                                     } else {
                                         "OR"
                                     }
-
+                                
                                 rows.add(
-                                    Row()
+                                    Row(
+                                        logic = logicForNext
+                                    )
                                 )
-
                                 currentIndex =
                                     rows.lastIndex
 
@@ -1335,17 +1334,18 @@ root.addView(
                     return@setOnClickListener
                 }
 
-                val cfg =
-                    ScanConfig(
-                        timeframe =
-                            selectedTimeframes.first(),
-                        logic =
-                            logicHolder[0],
-                        conditions =
-                            conditions,
-                        timeframes =
-                            selectedTimeframes.toList()
+                val logicForNext =
+                    if (which == 0) {
+                        "AND"
+                    } else {
+                        "OR"
+                    }
+                
+                rows.add(
+                    Row(
+                        logic = logicForNext
                     )
+                )
 
                 ScanConfigStore.save(
                     this@MainActivity,
@@ -3421,6 +3421,7 @@ private fun validateConditions(
             var rightTarget: Double = 0.0,
         
             var rangePct: Double = 1.0
+            var logic: String = "AND"
         ) {
         
             fun toCondition(): Condition {
@@ -3432,7 +3433,8 @@ private fun validateConditions(
                     rightIndicator = rightIndicator,
                     rightParams = rightParams.toList(),
                     rightTarget = rightTarget,
-                    rangePct = rangePct
+                    rangePct = rangePct,
+                    logic = logic    
                 )
             }
         }    
