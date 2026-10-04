@@ -1334,18 +1334,17 @@ root.addView(
                     return@setOnClickListener
                 }
 
-                val logicForNext =
-                    if (which == 0) {
-                        "AND"
-                    } else {
-                        "OR"
-                    }
-                
-                rows.add(
-                    Row(
-                        logic = logicForNext
+                val cfg =
+                    ScanConfig(
+                        timeframe =
+                            selectedTimeframes.first(),
+                        logic =
+                            "AND",
+                        conditions =
+                            conditions,
+                        timeframes =
+                            selectedTimeframes.toList()
                     )
-                )
 
                 ScanConfigStore.save(
                     this@MainActivity,
