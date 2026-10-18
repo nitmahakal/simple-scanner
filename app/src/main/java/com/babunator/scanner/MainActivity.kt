@@ -1676,176 +1676,169 @@ private fun showScanResultScreen(runId: Long) {
         lp()
     )
 
+    
     val matches = db.resultMatches(runId)
 
-    if (matches.isEmpty()) {
+    val indicatorNames = linkedSetOf<String>()
+
+    val parsedRows = matches.map { match ->
+        val values = linkedMapOf<String, String>()
+
+        match.note
+            .substringAfter("\n\n", "")
+            .lines()
+            .forEach { line ->
+                if (line.startsWith("Close:")) {
+                    return@forEach
+                }
+
+                val separator = line.indexOf(": ")
+
+                if (separator > 0) {
+                    val name = line.substring(0, separator)
+                    val value = line.substring(separator + 2)
+
+                    values[name] = value
+                    indicatorNames.add(name)
+                }
+            }
+
+        match to values
+    }
+
+    val configuredTimeframes =
+        config.timeframes
+            .ifEmpty { listOf(config.timeframe) }
+            .distinct()
+
+    val timeframesToShow =
+        (configuredTimeframes + matches.map { it.timeframe })
+            .distinct()
+
+    fun resultCell(
+        value: String,
+        header: Boolean = false
+    ): TextView {
+        return TextView(this).apply {
+            text = value
+            textSize = if (header) 13f else 14f
+
+            if (header) {
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+            }
+
+            setPadding(18, 12, 18, 12)
+            setSingleLine(true)
+
+            layoutParams = TableRow.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+    }
+
+    timeframesToShow.forEach { timeframe ->
 
         root.addView(
             TextView(this).apply {
-                text = "No stocks matched this scan."
-                textSize = 15f
-                setPadding(0, 8, 0, 16)
+                text = timeframe
+                textSize = 17f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 12, 0, 6)
             },
             lp()
         )
 
-    } else {
-
-        val indicatorNames =
-            linkedSetOf<String>()
-
-        val parsedRows =
-            matches.map { match ->
-
-                val values =
-                    linkedMapOf<String, String>()
-
-                match.note
-                    .substringAfter("\n\n", "")
-                    .lines()
-                    .forEach { line ->
-
-                        if (line.startsWith("Close:")) {
-                            return@forEach
-                        }
-
-                        val separator =
-                            line.indexOf(": ")
-
-                        if (separator > 0) {
-
-                            val name =
-                                line.substring(
-                                    0,
-                                    separator
-                                )
-
-                            val value =
-                                line.substring(
-                                    separator + 2
-                                )
-
-                            values[name] = value
-                            indicatorNames.add(name)
-                        }
-                    }
-
-                match to values
+        val timeframeRows =
+            parsedRows.filter { (match, _) ->
+                match.timeframe == timeframe
             }
 
-        val columns =
-            mutableListOf<String>().apply {
+        if (timeframeRows.isEmpty()) {
+            root.addView(
+                TextView(this).apply {
+                    text = "No stocks matched in $timeframe."
+                    textSize = 14f
+                    setPadding(0, 4, 0, 12)
+                },
+                lp()
+            )
+        } else {
+            val columns = mutableListOf<String>().apply {
                 add("STOCK")
-                add("TIMEFRAME")
                 add("LTP")
                 addAll(indicatorNames)
             }
 
-        val horizontalScroll =
-            HorizontalScrollView(this).apply {
-                isFillViewport = false
-            }
-
-        val table =
-            TableLayout(this).apply {
+            val table = TableLayout(this).apply {
                 isStretchAllColumns = false
                 isShrinkAllColumns = false
-                setPadding(0, 0, 0, 16)
+                setPadding(0, 0, 0, 12)
             }
 
-        fun cell(
-            value: String,
-            header: Boolean = false
-        ): TextView {
+            val headerRow = TableRow(this)
 
-            return TextView(this).apply {
+            columns.forEach { column ->
+                headerRow.addView(
+                    resultCell(column, true)
+                )
+            }
 
-                text = value
-                textSize = if (header) 13f else 14f
+            table.addView(headerRow)
 
-                if (header) {
-                    setTypeface(
-                        typeface,
-                        android.graphics.Typeface.BOLD
+            timeframeRows.forEach { (match, values) ->
+                val row = TableRow(this)
+
+                row.addView(resultCell(match.symbol))
+
+                row.addView(
+                    resultCell(
+                        String.format(
+                            Locale.US,
+                            "%.2f",
+                            match.close
+                        )
+                    )
+                )
+
+                indicatorNames.forEach { name ->
+                    val rawValue = values[name]
+
+                    val formattedValue =
+                        rawValue?.toDoubleOrNull()?.let {
+                            String.format(Locale.US, "%.2f", it)
+                        } ?: (rawValue ?: "—")
+
+                    row.addView(
+                        resultCell(formattedValue)
                     )
                 }
 
-                setPadding(
-                    18,
-                    12,
-                    18,
-                    12
-                )
-
-                setSingleLine(true)
-
-                layoutParams =
-                    TableRow.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-            }
-        }
-
-        val headerRow =
-            TableRow(this)
-
-        columns.forEach { column ->
-            headerRow.addView(
-                cell(
-                    column,
-                    true
-                )
-            )
-        }
-
-        table.addView(headerRow)
-
-        parsedRows.forEach { (match, values) ->
-
-            val row =
-                TableRow(this)
-
-            row.addView(
-                cell(match.symbol)
-            )
-
-            row.addView(
-                cell(match.timeframe)
-            )
-
-            row.addView(
-                cell(
-                    String.format(
-                        Locale.US,
-                        "%.2f",
-                        match.close
-                    )
-                )
-            )
-
-            indicatorNames.forEach { name ->
-
-                row.addView(
-                    cell(
-                        values[name] ?: "—"
-                    )
-                )
+                table.addView(row)
             }
 
-            table.addView(row)
-        }
+            val horizontalScroll =
+                HorizontalScrollView(this).apply {
+                    isFillViewport = false
+                    addView(table)
+                }
 
-        horizontalScroll.addView(table)
-
-        root.addView(
-            horizontalScroll,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            root.addView(
+                horizontalScroll,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
             )
-        )
+        }
     }
+
     root.addView(
         Button(this).apply {
             text = "TRACK THIS SCAN"
