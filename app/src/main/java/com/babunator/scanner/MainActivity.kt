@@ -1724,10 +1724,12 @@ private fun showScanResultScreen(runId: Long) {
         match to values
     }
 
+    
     val configuredTimeframes =
-        config.timeframes
-            .ifEmpty { listOf(config.timeframe) }
+        savedTimeframes
+            .ifEmpty { matches.map { it.timeframe }.distinct() }
             .distinct()
+
 
     val timeframesToShow =
         (configuredTimeframes + matches.map { it.timeframe })
