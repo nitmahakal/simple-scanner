@@ -132,12 +132,16 @@ class ScannerEngine(private val db: AppDb) {
                     }
                 }
 
-                val ok =
-                    if (cfg.logic == "OR") {
-                        checks.any { it }
-                    } else {
-                        checks.all { it }
-                    }
+                var ok = checks.firstOrNull() ?: false
+
+                for (index in 1 until checks.size) {
+                    ok =
+                        if (cfg.conditions[index].logic == "OR") {
+                            ok || checks[index]
+                        } else {
+                            ok && checks[index]
+                        }
+                }
 
                 if (ok) {
 
