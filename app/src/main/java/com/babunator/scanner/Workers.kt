@@ -228,14 +228,22 @@ class ScanWorker(
                 append("\n")
                 append("Logic = ")
                 append(cfg.logic)
-
+            
                 cfg.conditions.forEachIndexed { index, c ->
                     append("\n")
+            
                     append("Condition ")
                     append(index + 1)
+            
+                    if (index > 0) {
+                        append(" [")
+                        append(c.logic)
+                        append("]")
+                    }
+            
                     append(" = ")
                     append(c.leftIndicator)
-
+            
                     if (c.leftParams.isNotEmpty()) {
                         append(
                             c.leftParams.joinToString(
@@ -244,12 +252,12 @@ class ScanWorker(
                             )
                         )
                     }
-
+            
                     append(" ")
                     append(c.comparator)
                     append(" ")
                     append(c.rightIndicator)
-
+            
                     if (c.rightParams.isNotEmpty()) {
                         append(
                             c.rightParams.joinToString(
@@ -258,13 +266,14 @@ class ScanWorker(
                             )
                         )
                     }
-
+            
                     if (c.rightIndicator == "Number") {
                         append(" ")
                         append(c.rightTarget)
                     }
                 }
             }
+
 
             db.saveRun(
                 savedTimeframes,
