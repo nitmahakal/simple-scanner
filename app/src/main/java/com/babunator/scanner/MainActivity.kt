@@ -1594,11 +1594,28 @@ private fun showScanResultScreen(runId: Long) {
 
     val db = AppDb(this)
 
+    
     val runHeader =
         db.recentRuns(30)
             .firstOrNull {
                 it.startsWith("#$runId ")
             }
+
+    val savedConditions = db.runConditions(runId)
+
+    val scanTime = runHeader
+        ?.removePrefix("#$runId  ")
+        ?.substringBefore("  ")
+        ?: "Unknown"
+
+    val savedTimeframes = savedConditions
+        .lineSequence()
+        .firstOrNull { it.startsWith("TF = ") }
+        ?.substringAfter("TF = ")
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: emptyList()
 
     root.addView(
         TextView(this).apply {
@@ -1613,23 +1630,20 @@ private fun showScanResultScreen(runId: Long) {
         lp()
     )
 
-        root.addView(
+    root.addView(
         TextView(this).apply {
-            text = runHeader ?: "#$runId"
+            text = "Scan Time: $scanTime"
             textSize = 14f
             setPadding(0, 0, 0, 12)
         },
         lp()
     )
-
-    val config = ScanConfigStore.load(this)
 
     root.addView(
         TextView(this).apply {
             text = "Timeframes: " +
-                    config.timeframes
-                        .ifEmpty { listOf(config.timeframe) }
-                        .joinToString(", ")
+                savedTimeframes.joinToString(", ")
+                    .ifEmpty { "Not saved" }
             textSize = 14f
             setPadding(0, 0, 0, 12)
         },
@@ -1638,7 +1652,7 @@ private fun showScanResultScreen(runId: Long) {
 
     root.addView(
         TextView(this).apply {
-            text = "SCAN RESULTS"
+            text = "SCAN CONDITIONS"
             textSize = 16f
             setTypeface(
                 typeface,
@@ -1647,21 +1661,25 @@ private fun showScanResultScreen(runId: Long) {
             setPadding(0, 0, 0, 8)
         },
         lp()
-    )    
+    )
 
-        root.addView(
-            TextView(this).apply {
-                text = db.runConditions(runId)
-                textSize = 15f
-                setPadding(0, 0, 0, 12)
-        
-                setTypeface(
-                    typeface,
-                    android.graphics.Typeface.NORMAL
-                )
-            },
-            lp()
-        )
+    root.addView(
+        TextView(this).apply {
+            text = savedConditions
+                .lineSequence()
+                .filterNot { it.startsWith("TF = ") }
+                .joinToString("\n")
+                .ifEmpty { "No saved conditions found." }
+            textSize = 15f
+            setPadding(0, 0, 0, 12)
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.NORMAL
+            )
+        },
+        lp()
+    )
+
 
     root.addView(
         TextView(this).apply {
