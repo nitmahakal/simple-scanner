@@ -1481,6 +1481,7 @@ root.addView(
         lp()
     )
 
+    var scanWasRunning = false
     scanMonitorJob =
         lifecycleScope.launch {
 
@@ -1507,6 +1508,8 @@ root.addView(
                         workInfo.state ==
                                 androidx.work.WorkInfo.State.RUNNING -> {
 
+                            scanWasRunning = true 
+                        
                             scanButton.text =
                                 "SCAN IN PROGRESS"
 
@@ -1517,7 +1520,8 @@ root.addView(
                                 "Scan in progress..."
                         }
                         workInfo.state ==
-                                androidx.work.WorkInfo.State.SUCCEEDED -> {
+                                androidx.work.WorkInfo.State.SUCCEEDED &&
+                                scanWasRunning -> {
                         
                             scanButton.text =
                                 "SCAN NOW"
