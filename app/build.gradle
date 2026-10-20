@@ -15,7 +15,28 @@ android {
         versionName '1.0'
     }
 
+    // Fixed signing key used by CI so every APK has the same signature
+    // (otherwise updates fail and app data is lost on reinstall).
+    // The keystore file is written by the GitHub workflow from secrets;
+    // when it is not present the normal debug key is used as before.
+    signingConfigs {
+        ci {
+            def ks = file('ci-signing.jks')
+            if (ks.exists()) {
+                storeFile ks
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (file('ci-signing.jks').exists()) {
+                signingConfig signingConfigs.ci
+            }
+        }
         release {
             minifyEnabled false
         }
