@@ -94,8 +94,10 @@ class DailyStarterWorker(
 object WorkChain {
 
     private const val UPDATE_WORK = "nse_data_update"
-    private const val TRACKING_WORK = "nse_auto_tracking"
 
+    // Daily run: data update first. After the last update chunk,
+    // UpdateWorker itself runs the daily scan and then auto tracking
+    // (see UpdateWorker.enqueuePostUpdateChain).
     fun enqueue(context: Context) {
 
         val updateRequest =
@@ -104,6 +106,7 @@ object WorkChain {
                     Data.Builder()
                         .putInt("offset", 0)
                         .putInt("limit", 25)
+                        .putBoolean("chain", true)
                         .build()
                 )
                 .setConstraints(
@@ -120,24 +123,6 @@ object WorkChain {
                 UPDATE_WORK,
                 ExistingWorkPolicy.KEEP,
                 updateRequest
-            )
-
-        val trackingRequest =
-            OneTimeWorkRequestBuilder<AutoTrackingWorker>()
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(
-                            NetworkType.CONNECTED
-                        )
-                        .build()
-                )
-                .build()
-
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork(
-                TRACKING_WORK,
-                ExistingWorkPolicy.KEEP,
-                trackingRequest
             )
     }
 }
