@@ -13,6 +13,7 @@ Fresh standalone Android project. It does not reuse the old NSE Research App.
 - Daily scheduled update followed by scan.
 - Scan result history is saved and viewable.
 - Scanned-stock tracking is deliberately NOT included yet.
+- tracking ia yes to be finalised.
 
 ## GitHub
 Create a brand-new empty repository and upload the extracted ZIP contents to `main` in one initial commit.
