@@ -1,8 +1,22 @@
 package com.babunator.scanner
 
+import java.time.LocalDate
 import java.util.Locale
 
 class ScannerEngine(private val db: AppDb) {
+
+    // Symbols whose last candle is older than this many days (compared to the
+    // market's latest date) are skipped: delisted / suspended / dead data.
+    private val staleDays = 7L
+
+    // Liquid anchors used to find the market's latest data date.
+    private val anchorSymbols = listOf(
+        "RELIANCE",
+        "TCS",
+        "HDFCBANK",
+        "INFY",
+        "ICICIBANK"
+    )
 
     fun resample(rows: List<Candle>, timeframe: String): List<Candle> {
         if (rows.isEmpty() || timeframe == "Daily") {
@@ -29,6 +43,19 @@ class ScannerEngine(private val db: AppDb) {
         return groups.values.toList()
     }
 
+    private fun staleCutoff(): LocalDate? {
+        val latest = anchorSymbols
+            .mapNotNull { db.getHistory(it).lastOrNull()?.date }
+            .maxOrNull()
+            ?: return null
+
+        return try {
+            LocalDate.parse(latest).minusDays(staleDays)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun scan(
         symbols: List<String>,
         cfg: ScanConfig
@@ -41,11 +68,25 @@ class ScannerEngine(private val db: AppDb) {
                 .ifEmpty { listOf(cfg.timeframe) }
                 .distinct()
 
+        val cutoff = staleCutoff()
+
         for (s in symbols) {
 
             val history = db.getHistory(s)
 
             if (history.isEmpty()) continue
+
+            if (cutoff != null) {
+                val lastDate = try {
+                    LocalDate.parse(history.last().date)
+                } catch (_: Exception) {
+                    null
+                }
+
+                if (lastDate != null && lastDate.isBefore(cutoff)) {
+                    continue
+                }
+            }
 
             for (timeframe in selectedTimeframes) {
 
