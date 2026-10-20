@@ -15,6 +15,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 
 class UpdateWorker(
     appContext: Context,
@@ -66,19 +67,12 @@ class UpdateWorker(
                 var updated = false
 
                 try {
-                    val rows = if (!historyInitialized) {
-                        provider.fetchDaily(s, 500)
-                    } else {
-                        val lastDate = history.lastOrNull()
-                            ?.date
-                            ?.let { LocalDate.parse(it) }
-
-                        if (lastDate != null) {
-                            provider.fetchDailySince(s, lastDate)
-                        } else {
-                            provider.fetchDaily(s, 500)
-                        }
-                    }
+                    val rows = loadRows(
+                        provider,
+                        s,
+                        history,
+                        historyInitialized
+                    )
 
                     db.upsertPrices(s, rows)
 
@@ -95,19 +89,12 @@ class UpdateWorker(
                     retryCount++
 
                     try {
-                        val rows = if (!historyInitialized) {
-                            provider.fetchDaily(s, 500)
-                        } else {
-                            val lastDate = history.lastOrNull()
-                                ?.date
-                                ?.let { LocalDate.parse(it) }
-
-                            if (lastDate != null) {
-                                provider.fetchDailySince(s, lastDate)
-                            } else {
-                                provider.fetchDaily(s, 500)
-                            }
-                        }
+                        val rows = loadRows(
+                            provider,
+                            s,
+                            history,
+                            historyInitialized
+                        )
 
                         db.upsertPrices(s, rows)
 
@@ -211,6 +198,42 @@ class UpdateWorker(
         } catch (_: Exception) {
             Result.failure()
         }
+    }
+
+    // First sync: full history. Later syncs: only data since the last stored
+    // date. The overlapping (last stored) candle is compared with what Yahoo
+    // returns now; a big difference means a split/bonus re-adjusted the past,
+    // so the whole history is fetched again and overwritten.
+    private fun loadRows(
+        provider: DataProvider,
+        symbol: String,
+        history: List<Candle>,
+        historyInitialized: Boolean
+    ): List<Candle> {
+
+        if (!historyInitialized) {
+            return provider.fetchDaily(symbol, 500)
+        }
+
+        val last = history.lastOrNull()
+            ?: return provider.fetchDaily(symbol, 500)
+
+        val rows = provider.fetchDailySince(
+            symbol,
+            LocalDate.parse(last.date)
+        )
+
+        val overlap = rows.firstOrNull { it.date == last.date }
+
+        if (overlap != null && last.close > 0.0) {
+            val change = abs(overlap.close - last.close) / last.close
+
+            if (change > 0.03) {
+                return provider.fetchDaily(symbol, 500)
+            }
+        }
+
+        return rows
     }
 
     private fun enqueuePostUpdateChain() {
