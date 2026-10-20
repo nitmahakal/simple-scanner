@@ -30,6 +30,11 @@ class UpdateWorker(
 
             val offset = inputData.getInt("offset", 0)
             val limit = inputData.getInt("limit", 25)
+
+            // true only for the scheduled daily run: after the last chunk,
+            // run the daily scan and then auto tracking on fresh data.
+            val chain = inputData.getBoolean("chain", false)
+
             val part = symbols.drop(offset).take(limit)
 
             var processed = offset
@@ -162,6 +167,10 @@ class UpdateWorker(
                     )
                 )
 
+                if (chain) {
+                    enqueuePostUpdateChain()
+                }
+
             } else {
 
                 val nextRequest = OneTimeWorkRequestBuilder<UpdateWorker>()
@@ -169,6 +178,7 @@ class UpdateWorker(
                         Data.Builder()
                             .putInt("offset", processed)
                             .putInt("limit", limit)
+                            .putBoolean("chain", chain)
                             .build()
                     )
                     .setConstraints(
@@ -202,6 +212,30 @@ class UpdateWorker(
             Result.failure()
         }
     }
+
+    private fun enqueuePostUpdateChain() {
+        val scanRequest =
+            OneTimeWorkRequestBuilder<ScanWorker>()
+                .setInputData(
+                    Data.Builder()
+                        .putBoolean("chain", true)
+                        .build()
+                )
+                .build()
+
+        val trackingRequest =
+            OneTimeWorkRequestBuilder<AutoTrackingWorker>()
+                .build()
+
+        WorkManager.getInstance(applicationContext)
+            .beginUniqueWork(
+                "nse_post_update",
+                ExistingWorkPolicy.REPLACE,
+                scanRequest
+            )
+            .then(trackingRequest)
+            .enqueue()
+    }
 }
 
 class ScanWorker(
@@ -210,6 +244,8 @@ class ScanWorker(
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
+        val chained = inputData.getBoolean("chain", false)
+
         return try {
             val db = AppDb(applicationContext)
             val cfg = ScanConfigStore.load(applicationContext)
@@ -283,7 +319,8 @@ class ScanWorker(
 
             Result.success()
         } catch (_: Exception) {
-            Result.failure()
+            // In the daily chain a failed scan must not block auto tracking.
+            if (chained) Result.success() else Result.failure()
         }
     }
 }
