@@ -10,9 +10,15 @@ import java.time.ZoneId
 
 class DataProvider {
 
+    private val ist: ZoneId = ZoneId.of("Asia/Kolkata")
+
+    // NSE equity history is far older than this start date, so this means "full history".
+    // Do NOT use range=max: Yahoo silently returns monthly bars for long histories.
+    private val fullHistoryStart: LocalDate = LocalDate.of(1990, 1, 1)
+
     private fun get(url: String): String {
         val c = URL(url).openConnection() as HttpURLConnection
-        
+
         try {
             c.connectTimeout = 15000
             c.readTimeout = 20000
@@ -21,11 +27,11 @@ class DataProvider {
                 "User-Agent",
                 "Mozilla/5.0 NSE-Simple-Scanner/1.0"
             )
-        
+
             if (c.responseCode !in 200..299) {
                 throw IllegalStateException("HTTP ${c.responseCode}")
             }
-        
+
             return BufferedReader(c.inputStream.reader()).use {
                 it.readText()
             }
@@ -57,32 +63,38 @@ class DataProvider {
     }
 
     fun fetchDaily(symbol: String, days: Int): List<Candle> {
-        val q = URLEncoder.encode(
-            "${symbol}.NS",
-            "UTF-8"
+        return fetchRange(
+            symbol = symbol,
+            fromDate = fullHistoryStart,
+            allowEmpty = false
         )
-
-        val url =
-            "https://query1.finance.yahoo.com/v8/finance/chart/$q" +
-                    "?range=max" +
-                    "&interval=1d&events=div%2Csplits"
-
-        return parseDaily(symbol, get(url), allowEmpty = false)
     }
 
     fun fetchDailySince(symbol: String, fromDate: LocalDate): List<Candle> {
+        return fetchRange(
+            symbol = symbol,
+            fromDate = fromDate,
+            allowEmpty = true
+        )
+    }
+
+    private fun fetchRange(
+        symbol: String,
+        fromDate: LocalDate,
+        allowEmpty: Boolean
+    ): List<Candle> {
         val q = URLEncoder.encode(
             "${symbol}.NS",
             "UTF-8"
         )
 
         val period1 = fromDate
-            .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+            .atStartOfDay(ist)
             .toEpochSecond()
 
-        val period2 = LocalDate.now()
+        val period2 = LocalDate.now(ist)
             .plusDays(1)
-            .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+            .atStartOfDay(ist)
             .toEpochSecond()
 
         val url =
@@ -91,7 +103,7 @@ class DataProvider {
                     "&period2=$period2" +
                     "&interval=1d&events=div%2Csplits"
 
-        return parseDaily(symbol, get(url), allowEmpty = true)
+        return parseDaily(symbol, get(url), allowEmpty)
     }
 
     private fun parseDaily(
@@ -120,6 +132,18 @@ class DataProvider {
         }
 
         val result = resultArray.getJSONObject(0)
+
+        // Safety check: never store anything that is not true daily data.
+        val granularity = result
+            .optJSONObject("meta")
+            ?.optString("dataGranularity", "")
+            .orEmpty()
+
+        if (granularity.isNotEmpty() && granularity != "1d") {
+            throw IllegalStateException(
+                "Unexpected data granularity '$granularity' for $symbol"
+            )
+        }
 
         val ts = result.optJSONArray("timestamp")
             ?: if (allowEmpty) {
@@ -158,7 +182,7 @@ class DataProvider {
 
             val d = java.time.Instant
                 .ofEpochSecond(ts.getLong(i))
-                .atZone(ZoneId.of("Asia/Kolkata"))
+                .atZone(ist)
                 .toLocalDate()
                 .toString()
 
