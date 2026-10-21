@@ -123,6 +123,8 @@ object Indicators {
 
     // =========================================================
     // HMA
+    // Matches TradingView (verified on RELIANCE daily):
+    // half = floor(n / 2), root = round(sqrt(n))
     // =========================================================
 
     fun hma(x: List<Double>, n: Int): List<Double?> {
@@ -130,7 +132,7 @@ object Indicators {
         if (n <= 0 || x.isEmpty()) return out
         if (n == 1) return x.map { it }
 
-        val half = max(1, (n / 2.0).roundToInt())
+        val half = max(1, n / 2)
         val root = max(1, sqrt(n.toDouble()).roundToInt())
 
         val halfWma = wma(x, half)
