@@ -8,7 +8,8 @@ object ConditionEngine {
      * Basic comparison.
      *
      * All calculations use full Double precision.
-     * Near By / May Go To Cross use percentage gap.
+     * Near By / May Go To Cross use percentage gap
+     * (measured against the right side value).
      */
     fun compare(
         a: Double,
@@ -17,44 +18,67 @@ object ConditionEngine {
         rangePct: Double
     ): Boolean {
 
-        if (
-            a.isNaN() ||
-            a.isInfinite() ||
-            b.isNaN() ||
-            b.isInfinite()
-        ) {
+        if (!isUsable(a) || !isUsable(b)) {
             return false
         }
 
-        val gap =
-            abs(a - b) /
-                    maxOf(abs(b), 1e-12) *
-                    100.0
+        val gap = abs(a - b) / maxOf(abs(b), 1e-12) * 100.0
 
         return when (op) {
+            "Above" -> a > b
+            "Below" -> a < b
+            "Equal" -> abs(a - b) < 1e-9
+            "Near By" -> gap <= rangePct
+            "May Go To Cross Above" -> a < b && gap <= rangePct
+            "May Go To Cross Below" -> a > b && gap <= rangePct
+            else -> false
+        }
+    }
 
-            "Above" ->
-                a > b
+    private fun isUsable(value: Double): Boolean {
+        return !value.isNaN() && !value.isInfinite()
+    }
 
-            "Below" ->
-                a < b
+    /*
+     * Cross Above / Cross Below: the previous candle must be on one
+     * side and the current candle on the other side.
+     */
+    private fun crossed(
+        series: List<Double>,
+        c: Condition,
+        currentLeft: Double,
+        currentRight: Double,
+        above: Boolean
+    ): Boolean {
 
-            "Equal" ->
-                abs(a - b) < 1e-9
+        if (series.size < 2) return false
 
-            "Near By" ->
-                gap <= rangePct
+        val previousSeries = series.dropLast(1)
 
-            "May Go To Cross Above" ->
-                a < b &&
-                        gap <= rangePct
+        val previousLeft =
+            Indicators.valueAt(
+                previousSeries,
+                c.leftIndicator,
+                c.leftParams
+            ) ?: return false
 
-            "May Go To Cross Below" ->
-                a > b &&
-                        gap <= rangePct
+        val previousRight =
+            if (c.rightIndicator == "Number") {
+                c.rightTarget
+            } else {
+                Indicators.valueAt(
+                    previousSeries,
+                    c.rightIndicator,
+                    c.rightParams
+                ) ?: return false
+            }
 
-            else ->
-                false
+        if (!isUsable(previousLeft) || !isUsable(previousRight)) return false
+
+        return if (above) {
+            previousLeft <= previousRight && currentLeft > currentRight
+        } else {
+            previousLeft >= previousRight && currentLeft < currentRight
         }
     }
 
@@ -64,9 +88,6 @@ object ConditionEngine {
      * Current indicator values are supplied by ScannerEngine,
      * so normal comparisons do not calculate the same indicators
      * a second time.
-     *
-     * For Cross Above / Cross Below, only the previous candle
-     * values need to be calculated here.
      */
     fun evaluate(
         series: List<Double>,
@@ -75,120 +96,83 @@ object ConditionEngine {
         currentRight: Double?
     ): Boolean {
 
-        if (series.isEmpty()) {
-            return false
-        }
-
-        if (currentLeft == null || currentRight == null) {
-            return false
-        }
-
-        if (
-            currentLeft.isNaN() ||
-            currentLeft.isInfinite() ||
-            currentRight.isNaN() ||
-            currentRight.isInfinite()
-        ) {
-            return false
-        }
+        if (series.isEmpty()) return false
+        if (currentLeft == null || currentRight == null) return false
+        if (!isUsable(currentLeft) || !isUsable(currentRight)) return false
 
         return when (c.comparator) {
+            "Cross Above" -> crossed(series, c, currentLeft, currentRight, true)
+            "Cross Below" -> crossed(series, c, currentLeft, currentRight, false)
+            else -> compare(
+                a = currentLeft,
+                op = c.comparator,
+                b = currentRight,
+                rangePct = c.rangePct
+            )
+        }
+    }
 
-            "Cross Above" -> {
+    /*
+     * Combine the results of all conditions.
+     *
+     * logics[i] is how condition i is joined to the one before it
+     * (logics[0] is ignored). AND is checked first, then OR:
+     *
+     *   1 AND 2 OR 3      means  (1 AND 2) OR 3
+     *   1 OR 2 AND 3      means  1 OR (2 AND 3)
+     */
+    fun combine(
+        checks: List<Boolean>,
+        logics: List<String>
+    ): Boolean {
 
-                if (series.size < 2) {
-                    false
-                } else {
+        if (checks.isEmpty()) return false
 
-                    val previousSeries =
-                        series.dropLast(1)
+        var anyGroupTrue = false
+        var currentGroup = checks[0]
 
-                    val previousLeft =
-                        Indicators.valueAt(
-                            previousSeries,
-                            c.leftIndicator,
-                            c.leftParams
-                        )
-                            ?: return false
+        for (i in 1 until checks.size) {
+            val logic = logics.getOrNull(i) ?: "AND"
 
-                    val previousRight =
-                        if (c.rightIndicator == "Number") {
-                            c.rightTarget
-                        } else {
-                            Indicators.valueAt(
-                                previousSeries,
-                                c.rightIndicator,
-                                c.rightParams
-                            )
-                                ?: return false
-                        }
-
-                    if (
-                        previousLeft.isNaN() ||
-                        previousLeft.isInfinite() ||
-                        previousRight.isNaN() ||
-                        previousRight.isInfinite()
-                    ) {
-                        false
-                    } else {
-                        previousLeft <= previousRight &&
-                                currentLeft > currentRight
-                    }
-                }
-            }
-
-            "Cross Below" -> {
-
-                if (series.size < 2) {
-                    false
-                } else {
-
-                    val previousSeries =
-                        series.dropLast(1)
-
-                    val previousLeft =
-                        Indicators.valueAt(
-                            previousSeries,
-                            c.leftIndicator,
-                            c.leftParams
-                        )
-                            ?: return false
-
-                    val previousRight =
-                        if (c.rightIndicator == "Number") {
-                            c.rightTarget
-                        } else {
-                            Indicators.valueAt(
-                                previousSeries,
-                                c.rightIndicator,
-                                c.rightParams
-                            )
-                                ?: return false
-                        }
-
-                    if (
-                        previousLeft.isNaN() ||
-                        previousLeft.isInfinite() ||
-                        previousRight.isNaN() ||
-                        previousRight.isInfinite()
-                    ) {
-                        false
-                    } else {
-                        previousLeft >= previousRight &&
-                                currentLeft < currentRight
-                    }
-                }
-            }
-
-            else -> {
-
-                compare(
-                    a = currentLeft,
-                    op = c.comparator,
-                    b = currentRight,
-                    rangePct = c.rangePct
-                )
+            if (logic == "OR") {
+                anyGroupTrue = anyGroupTrue || currentGroup
+                currentGroup = checks[i]
+            } else {
+                currentGroup = currentGroup && checks[i]
             }
         }
+
+        return anyGroupTrue || currentGroup
+    }
+
+    /*
+     * One line that tells the user how the conditions were joined,
+     * for example:  Rule: (1 AND 2) OR 3  (AND is checked first, then OR)
+     * Empty when there is only one condition.
+     */
+    fun explain(logics: List<String>): String {
+
+        if (logics.size < 2) return ""
+
+        val groups = mutableListOf<MutableList<Int>>()
+        groups.add(mutableListOf(1))
+
+        for (i in 1 until logics.size) {
+            if (logics[i] == "OR") {
+                groups.add(mutableListOf(i + 1))
+            } else {
+                groups.last().add(i + 1)
+            }
+        }
+
+        val text = groups.joinToString(" OR ") { group ->
+            if (group.size == 1) {
+                group[0].toString()
+            } else {
+                group.joinToString(" AND ", "(", ")")
+            }
+        }
+
+        return "Rule: $text  (AND is checked first, then OR)"
     }
 }
