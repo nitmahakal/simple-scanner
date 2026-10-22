@@ -70,6 +70,9 @@ class ScannerEngine(private val db: AppDb) {
 
         val cutoff = staleCutoff()
 
+        val logics = cfg.conditions.map { it.logic }
+        val ruleText = ConditionEngine.explain(logics)
+
         for (s in symbols) {
 
             val history = db.getHistory(s)
@@ -173,16 +176,8 @@ class ScannerEngine(private val db: AppDb) {
                     }
                 }
 
-                var ok = checks.firstOrNull() ?: false
-
-                for (index in 1 until checks.size) {
-                    ok =
-                        if (cfg.conditions[index].logic == "OR") {
-                            ok || checks[index]
-                        } else {
-                            ok && checks[index]
-                        }
-                }
+                // AND is checked first, then OR (see ConditionEngine.combine).
+                val ok = ConditionEngine.combine(checks, logics)
 
                 if (ok) {
 
@@ -191,6 +186,11 @@ class ScannerEngine(private val db: AppDb) {
                         append(
                             conditionDetails.joinToString("\n")
                         )
+
+                        if (ruleText.isNotEmpty()) {
+                            append("\n")
+                            append(ruleText)
+                        }
 
                         append("\n\n")
 
