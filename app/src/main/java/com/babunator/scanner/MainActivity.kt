@@ -1674,6 +1674,16 @@ private fun showScanResultScreen(runId: Long) {
                 .filterNot { it.startsWith("TF = ") }
                 .joinToString("\n")
                 .ifEmpty { "No saved conditions found." }
+                .let { base ->
+                    val logics = savedConditions
+                        .lineSequence()
+                        .map { it.trim() }
+                        .filter { it.startsWith("Condition ") }
+                        .map { if (it.substringBefore(" = ").contains("[OR]")) "OR" else "AND" }
+                        .toList()
+                    val rule = ConditionEngine.explain(logics)
+                    if (rule.isEmpty()) base else base + "\n\n" + rule
+                }
             textSize = 15f
             setPadding(0, 0, 0, 12)
             setTypeface(
