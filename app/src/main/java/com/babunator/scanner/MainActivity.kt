@@ -2,6 +2,7 @@ package com.babunator.scanner
 
 import android.app.TimePickerDialog
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -73,9 +74,26 @@ class MainActivity : AppCompatActivity() {
 
     private var updateMonitorJob: Job? = null
     private var scanMonitorJob: Job? = null
+    private var backTarget: (() -> Unit)? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         applySavedTheme()
         super.onCreate(savedInstanceState)
+
+                onBackPressedDispatcher.addCallback(
+                    this,
+                    object : OnBackPressedCallback(true) {
+                        override fun handleOnBackPressed() {
+                            val target = backTarget
+        
+                            if (target != null) {
+                                target()
+                            } else {
+                                isEnabled = false
+                                onBackPressedDispatcher.onBackPressed()
+                            }
+                        }
+                    }
+                )
 
         val retentionPrefs =
             getSharedPreferences(
@@ -256,6 +274,7 @@ private fun styleButton(button: Button) {
     // SCREEN 1 : UPDATE DATA
     // ---------------------------------------------------------
 private fun showUpdateScreen() {
+    backTarget = null
     updateMonitorJob?.cancel()
     scanMonitorJob?.cancel()
     content.removeAllViews()
@@ -612,6 +631,7 @@ private fun showUpdateScreen() {
     // ---------------------------------------------------------
 
 private fun showScannerScreen() {
+    backTarget = null
     updateMonitorJob?.cancel()
     scanMonitorJob?.cancel()
     content.removeAllViews()
@@ -1585,7 +1605,16 @@ root.addView(
 
     content.addView(root)
 }
+
 private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
+    backTarget = {
+        if (fromHistory) {
+            showSavedScreen()
+            showHistory()
+        } else {
+            showScannerScreen()
+        }
+    }
 
     scanMonitorJob?.cancel()
     updateMonitorJob?.cancel()
@@ -2178,6 +2207,7 @@ private fun formatInputNumber(
     // SCREEN 3 : SAVED SCANS / TRACKING
     // ---------------------------------------------------------
         private fun showSavedScreen() {
+            backTarget = null
             updateMonitorJob?.cancel()
             scanMonitorJob?.cancel()
             content.removeAllViews()
@@ -2350,6 +2380,9 @@ private fun formatInputNumber(
         }    
 
         private fun showSavedScanList(autoTrack: Boolean) {
+            backTarget = { showSavedScreen() }
+                
+        
         
             updateMonitorJob?.cancel()
             scanMonitorJob?.cancel()
@@ -2485,6 +2518,7 @@ private fun formatInputNumber(
         val db = AppDb(this)
 
         val scan = db.getSavedScan(savedScanId)
+        backTarget = { showSavedScanList(scan?.autoTrack ?: false) }
 
         root.addView(
             TextView(this).apply {
