@@ -1585,7 +1585,7 @@ root.addView(
 
     content.addView(root)
 }
-private fun showScanResultScreen(runId: Long) {
+private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
 
     scanMonitorJob?.cancel()
     updateMonitorJob?.cancel()
@@ -1876,6 +1876,10 @@ private fun showScanResultScreen(runId: Long) {
     root.addView(
         Button(this).apply {
             text = "TRACK THIS SCAN"
+                    if (fromHistory) {
+                        visibility = android.view.View.GONE
+                        setActiveNavigation(savedNavButton)
+                    }
             styleButton(this)
 
             setOnClickListener {
@@ -1925,11 +1929,11 @@ private fun showScanResultScreen(runId: Long) {
     )
     root.addView(
         Button(this).apply {
-            text = "← BACK TO SCANNER"
+            text = if (fromHistory) "← BACK TO HISTORY" else "← BACK TO SCANNER"
             styleButton(this)
 
             setOnClickListener {
-                showScannerScreen()
+                if (fromHistory) { showSavedScreen(); showHistory() } else showScannerScreen()
             }
         },
         lp()
@@ -2961,7 +2965,7 @@ private fun showHistory() {
                 .toLongOrNull()
 
             if (id != null) {
-                showRunDetails(db, selectedRun, id)
+                showScanResultScreen(id, true)
             }
         }
         .show()
