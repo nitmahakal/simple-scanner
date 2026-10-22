@@ -747,7 +747,7 @@ root.addView(
             conditionEditor.addView(
                 TextView(this).apply {
                         text =
-                            "Logic: ${row.logic} between conditions"
+                            "Joined with previous condition by: ${row.logic}\n" + ConditionEngine.explain(rows.map { it.logic })
                     textSize = 13f
                     setPadding(0, 0, 0, 10)
                 },
