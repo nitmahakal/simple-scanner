@@ -107,7 +107,7 @@ class MainActivity : AppCompatActivity() {
                 true
             )
         ) {
-            AppDb(this).deleteOldNormalScans(
+            AppDb(this).deleteOldNormalScansKeepLast(
                 retentionPrefs.getInt(
                     "scan_retention_days",
                     7
@@ -1907,6 +1907,26 @@ private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
             text = "TRACK THIS SCAN"
                     if (fromHistory) {
                         visibility = android.view.View.GONE
+                        visibility = android.view.View.GONE
+                                        root.addView(
+                                            Button(this@MainActivity).apply {
+                                                text = "DELETE THIS SCAN"
+                                                styleButton(this)
+                                                setOnClickListener {
+                                                    AlertDialog.Builder(this@MainActivity)
+                                                        .setTitle("Delete this scan?")
+                                                        .setMessage("This scan will be removed from the history.")
+                                                        .setPositiveButton("DELETE") { _, _ ->
+                                                            db.deleteRun(runId)
+                                                            showSavedScreen()
+                                                            showHistory()
+                                                        }
+                                                        .setNegativeButton("Cancel", null)
+                                                        .show()
+                                                }
+                                            },
+                                            lp()
+                                        )
                         setActiveNavigation(savedNavButton)
                     }
             styleButton(this)
@@ -2892,7 +2912,7 @@ private fun formatInputNumber(
                     showRetentionDaysDialog()
                 }
             }
-            .setPositiveButton("SET DAYS") { _, _ ->
+            .setPositiveButton("SET COUNT") { _, _ ->
                 showRetentionDaysDialog()
             }
             .setNegativeButton("Cancel", null)
@@ -2920,7 +2940,7 @@ private fun formatInputNumber(
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Normal Scan Retention (Days)")
+            .setTitle("Scans to keep for each timeframe")
             .setView(field)
             .setPositiveButton("SAVE") { _, _ ->
 
@@ -2989,6 +3009,17 @@ private fun showHistory() {
 
     AlertDialog.Builder(this)
         .setTitle("Scan History")
+        .setNeutralButton("DELETE ALL") { _, _ ->
+            AlertDialog.Builder(this)
+                .setTitle("Delete all scan history?")
+                .setMessage("All scan results in the history will be removed. Tracked scans are not affected.")
+                .setPositiveButton("DELETE") { _, _ ->
+                    AppDb(this).deleteAllRuns()
+                    Toast.makeText(this, "Scan history deleted.", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
         .setItems(runs.toTypedArray()) { _, which ->
 
             val selectedRun = runs[which]
