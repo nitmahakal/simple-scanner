@@ -2,7 +2,8 @@ package com.babunator.scanner
 
 data class Candle(
     val date: String,
-    val close: Double
+    val close: Double,
+    val open: Double? = null
 )
 
 data class Condition(
