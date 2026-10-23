@@ -303,14 +303,18 @@ class DataProvider {
             throw IllegalStateException("Empty quote data for $symbol")
         }
 
-        val close = quote
-            .getJSONObject(0)
+        val quoteObject = quote.getJSONObject(0)
+
+        val close = quoteObject
             .optJSONArray("close")
             ?: if (allowEmpty) {
                 return emptyList()
             } else {
                 throw IllegalStateException("No close data for $symbol")
             }
+
+        // Open price is used for tracking entries and exits (next day's open).
+        val openArray = quoteObject.optJSONArray("open")
 
         val out = mutableListOf<Candle>()
 
@@ -323,9 +327,17 @@ class DataProvider {
                 .toLocalDate()
                 .toString()
 
+            val openValue =
+                if (openArray != null && i < openArray.length() && !openArray.isNull(i)) {
+                    openArray.getDouble(i)
+                } else {
+                    null
+                }
+
             out += Candle(
                 d,
-                close.getDouble(i)
+                close.getDouble(i),
+                openValue
             )
         }
 
