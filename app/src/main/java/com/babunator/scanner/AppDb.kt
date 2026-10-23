@@ -5,7 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6) {
+class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 7) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -13,6 +13,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
                     "symbol TEXT NOT NULL, " +
                     "date TEXT NOT NULL, " +
                     "close REAL NOT NULL, " +
+                    "open_price REAL, " +
                     "PRIMARY KEY(symbol,date))"
         )
 
@@ -85,6 +86,10 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
 
         if (oldVersion < 6) {
             createTrackingPerformanceTables(db)
+        }
+
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE prices ADD COLUMN open_price REAL")
         }
     }
 
@@ -181,6 +186,13 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
                 cv.put("date", r.date)
                 cv.put("close", r.close)
 
+                val openValue = r.open
+                if (openValue == null) {
+                    cv.putNull("open_price")
+                } else {
+                    cv.put("open_price", openValue)
+                }
+
                 writableDatabase.insertWithOnConflict(
                     "prices",
                     null,
@@ -222,7 +234,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
         val out = mutableListOf<Candle>()
 
         val c = readableDatabase.rawQuery(
-            "SELECT date,close FROM prices WHERE symbol=? ORDER BY date ASC",
+            "SELECT date,close,open_price FROM prices WHERE symbol=? ORDER BY date ASC",
             arrayOf(symbol)
         )
 
@@ -230,7 +242,8 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
             while (it.moveToNext()) {
                 out += Candle(
                     it.getString(0),
-                    it.getDouble(1)
+                    it.getDouble(1),
+                    if (it.isNull(2)) null else it.getDouble(2)
                 )
             }
         }
@@ -305,6 +318,61 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 6)
                         "julianday('now', '-' || ? || ' days')",
                 arrayOf(days.toString())
             )
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    // Keeps only the newest `keep` scans for every timeframe label
+    // (for example "Daily", "Weekly", "Daily, Weekly") and removes the rest.
+    fun deleteOldNormalScansKeepLast(keep: Int) {
+        if (keep < 1) return
+
+        val db = writableDatabase
+
+        val oldRuns =
+            "SELECT id FROM runs r WHERE " +
+                    "(SELECT COUNT(*) FROM runs r2 " +
+                    "WHERE r2.timeframe = r.timeframe AND r2.id > r.id) >= " +
+                    keep
+
+        db.beginTransaction()
+
+        try {
+            db.delete("results", "run_id IN ($oldRuns)", null)
+            db.delete("runs", "id IN ($oldRuns)", null)
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun deleteRun(runId: Long) {
+        val db = writableDatabase
+
+        db.beginTransaction()
+
+        try {
+            db.delete("results", "run_id=?", arrayOf(runId.toString()))
+            db.delete("runs", "id=?", arrayOf(runId.toString()))
+
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun deleteAllRuns() {
+        val db = writableDatabase
+
+        db.beginTransaction()
+
+        try {
+            db.delete("results", null, null)
+            db.delete("runs", null, null)
 
             db.setTransactionSuccessful()
         } finally {
