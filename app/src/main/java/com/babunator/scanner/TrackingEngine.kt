@@ -10,11 +10,16 @@ import java.time.LocalDateTime
  *  1. A confirmed signal is seen on a COMPLETED candle (for Weekly and
  *     Monthly the running candle is not used).
  *  2. Entry happens at the OPEN of the next candle.
- *  3. Default exit: when the scan conditions stop matching, the position
- *     is closed at the OPEN of the next candle.
+ *  3. Exit signals are also carried out at the OPEN of the next candle:
+ *       - stop-loss (fixed % below entry, checked on the candle close)
+ *       - stop-loss condition
+ *       - custom exit condition, or when none is set, the default exit:
+ *         the entry conditions stop matching.
+ *  4. After an exit by stop-loss or exit condition, a stock is not entered
+ *     again until the entry conditions have turned false once.
  *
- * Scans that contain Near By / May Go To Cross conditions only watch a
- * setup, so they are not tracked.
+ * Scans (and exit / stop-loss conditions) that contain Near By /
+ * May Go To Cross conditions only watch a setup, so they are not used.
  */
 class TrackingEngine(private val db: AppDb) {
 
@@ -51,6 +56,21 @@ class TrackingEngine(private val db: AppDb) {
         }
     }
 
+    // Exit / stop-loss condition: ignored when it cannot be read or is watch-only.
+    private fun parseRule(json: String?): ScanConfig? {
+        if (json == null) return null
+
+        val config = try {
+            ScanConfigStore.fromJson(json)
+        } catch (_: Exception) {
+            null
+        }
+
+        if (config == null || !isTrackable(config)) return null
+
+        return config
+    }
+
     fun process(
         savedScanId: Long,
         config: ScanConfig,
@@ -60,6 +80,12 @@ class TrackingEngine(private val db: AppDb) {
         if (!isTrackable(config)) {
             return Result(emptyList(), 0, 0, 0)
         }
+
+        val rules = store.getRules(savedScanId)
+        val exitConfig = parseRule(rules?.exitConfigJson)
+        val stopLossConfig = parseRule(rules?.stopLossConfigJson)
+        val stopLossPercent =
+            rules?.stopLossPercent?.takeIf { it > 0.0 && it < 100.0 }
 
         val timeframes =
             config.timeframes
@@ -73,6 +99,8 @@ class TrackingEngine(private val db: AppDb) {
         val pendingMap =
             store.getPending(savedScanId)
                 .associateBy { key(it.symbol, it.timeframe) }
+
+        val blocked = store.getBlocked(savedScanId).toMutableSet()
 
         val cutoff = staleCutoff()
 
@@ -122,7 +150,7 @@ class TrackingEngine(private val db: AppDb) {
                                 price
                             )
                             entries++
-                        } else if (waiting.kind == "EXIT" && position != null) {
+                        } else if (waiting.kind.startsWith("EXIT") && position != null) {
                             db.closeTrackingPosition(
                                 savedScanId,
                                 symbol,
@@ -141,72 +169,112 @@ class TrackingEngine(private val db: AppDb) {
 
                 // 2. Look for a new confirmed signal on the last completed candle.
                 if (doneRows.isNotEmpty()) {
-                    val matchNow = scanner.evaluateSeries(
-                        doneRows.map { it.close },
-                        config
-                    )
+                    val closes = doneRows.map { it.close }
+                    val lastDone = doneRows.last()
 
-                    if (matchNow) {
+                    val entryMatch = scanner.evaluateSeries(closes, config)
+
+                    if (entryMatch) {
                         matches += Match(symbol, timeframe, latest.close, "")
                     }
 
-                    if (pending == null) {
-                        val signalDate = doneRows.last().date
+                    // Entry conditions turned false once: entry is allowed again.
+                    if (!entryMatch && blocked.contains(k)) {
+                        store.removeBlocked(savedScanId, symbol, timeframe)
+                        blocked.remove(k)
+                    }
 
-                        if (position == null && matchNow) {
-                            store.upsertPending(
-                                savedScanId,
-                                symbol,
-                                timeframe,
-                                "ENTRY",
-                                signalDate
-                            )
-                            signals++
-                        } else if (position != null && !matchNow) {
-                            store.upsertPending(
-                                savedScanId,
-                                symbol,
-                                timeframe,
-                                "EXIT",
-                                signalDate
-                            )
-                            signals++
+                    if (pending == null) {
+                        val open = position
+
+                        if (open == null) {
+                            if (entryMatch && !blocked.contains(k)) {
+                                store.upsertPending(
+                                    savedScanId,
+                                    symbol,
+                                    timeframe,
+                                    "ENTRY",
+                                    lastDone.date
+                                )
+                                signals++
+                            }
+                        } else {
+                            // Only candles from the entry candle onward count.
+                            val fresh = lastDone.date >= open.opened
+
+                            var exitKind: String? = null
+
+                            if (fresh &&
+                                stopLossPercent != null &&
+                                lastDone.close <= open.entryPrice * (1.0 - stopLossPercent / 100.0)
+                            ) {
+                                exitKind = "EXIT-SL"
+                            } else if (fresh &&
+                                stopLossConfig != null &&
+                                scanner.evaluateSeries(closes, stopLossConfig)
+                            ) {
+                                exitKind = "EXIT-SL"
+                            } else if (exitConfig != null) {
+                                if (fresh && scanner.evaluateSeries(closes, exitConfig)) {
+                                    exitKind = "EXIT"
+                                }
+                            } else if (!entryMatch) {
+                                exitKind = "EXIT"
+                            }
+
+                            if (exitKind != null) {
+                                store.upsertPending(
+                                    savedScanId,
+                                    symbol,
+                                    timeframe,
+                                    exitKind,
+                                    lastDone.date
+                                )
+                                signals++
+
+                                // Entry conditions are still true: do not walk
+                                // back in until they have turned false once.
+                                if (entryMatch) {
+                                    store.addBlocked(savedScanId, symbol, timeframe)
+                                    blocked.add(k)
+                                }
+                            }
                         }
                     }
                 }
 
                 // 3. Keep the open position's numbers up to date.
-                val open = position
+                val current = position
 
-                if (open != null) {
-                    val current = latest.close
-                    val lowest = minOf(open.lowestPrice, current)
+                if (current != null) {
+                    val price = latest.close
+                    val lowest = minOf(current.lowestPrice, price)
 
                     val pnl =
-                        if (open.entryPrice == 0.0) {
+                        if (current.entryPrice == 0.0) {
                             0.0
                         } else {
-                            (current - open.entryPrice) / open.entryPrice * 100.0
+                            (price - current.entryPrice) / current.entryPrice * 100.0
                         }
 
                     val downside =
-                        if (open.entryPrice == 0.0) {
+                        if (current.entryPrice == 0.0) {
                             0.0
                         } else {
-                            (lowest - open.entryPrice) / open.entryPrice * 100.0
+                            (lowest - current.entryPrice) / current.entryPrice * 100.0
                         }
 
                     db.upsertTrackingPosition(
                         savedScanId = savedScanId,
                         symbol = symbol,
                         timeframe = timeframe,
-                        entryPrice = open.entryPrice,
-                        currentPrice = current,
+                        entryPrice = current.entryPrice,
+                        currentPrice = price,
                         lowestPrice = lowest,
                         pnl = pnl,
-                        maxDownside = minOf(open.maxDownside, downside),
+                        maxDownside = minOf(current.maxDownside, downside),
                         status = "OPEN",
-                        opened = open.opened,
+                        opened = current.opened,
                         updated = LocalDateTime.now().toString()
                     )
                 }
