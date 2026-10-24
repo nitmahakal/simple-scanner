@@ -2595,8 +2595,25 @@ private fun formatInputNumber(
                     styleButton(this)
 
                     setOnClickListener {
+        if (!scan.autoTrack) {
+                            val config = try {
+                                ScanConfigStore.fromJson(scan.configJson)
+                            } catch (_: Exception) {
+                                null
+                            }
+
+                            if (config != null && !TrackingEngine.isTrackable(config)) {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "This scan uses Near By / May Go To Cross conditions, so it is watch-only and cannot be auto tracked. Use confirmed conditions (Above, Below, Cross Above, Cross Below) to track.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                return@setOnClickListener
+                            }
+                        }
 
                         val newValue =
+        
                             !scan.autoTrack
 
                         db.setSavedScanAutoTrack(
@@ -2702,7 +2719,36 @@ private fun formatInputNumber(
                 )
             }
         }
+        val pendingSignals = TrackingStore(db).getPending(savedScanId)
 
+                if (pendingSignals.isNotEmpty()) {
+                    root.addView(
+                        TextView(this).apply {
+                            text = "WAITING FOR NEXT OPEN"
+                            textSize = 18f
+                            setTypeface(
+                                typeface,
+                                android.graphics.Typeface.BOLD
+                            )
+                            setPadding(0, 14, 0, 8)
+                        },
+                        lp()
+                    )
+        
+                    root.addView(
+                        TextView(this).apply {
+                            text = pendingSignals.joinToString("\n") {
+                                "${it.symbol} / ${it.timeframe}  " +
+                                    "${it.kind}  (signal: ${it.signalDate})"
+                            }
+                            textSize = 14f
+                            setPadding(0, 0, 0, 12)
+                        },
+                        lp()
+                    )
+                }
+        
+        
         val performance =
             db.getTrackingPerformance(savedScanId)
 
