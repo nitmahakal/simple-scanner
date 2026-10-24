@@ -5,7 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 7) {
+class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -52,6 +52,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 7)
         )
 
         createSavedScanTables(db)
+        createTrackingPerformanceTables(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -90,6 +91,11 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 7)
 
         if (oldVersion < 7) {
             db.execSQL("ALTER TABLE prices ADD COLUMN open_price REAL")
+        }
+
+        if (oldVersion < 8) {
+            // Fresh installs of version 6 and 7 never created these tables.
+            createTrackingPerformanceTables(db)
         }
     }
 
