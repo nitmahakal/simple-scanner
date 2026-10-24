@@ -18,15 +18,18 @@ class ScannerEngine(private val db: AppDb) {
         "ICICIBANK"
     )
 
+    // Weekly / Monthly candles: date and close come from the last day of the
+    // period, open comes from the first day of the period.
     fun resample(rows: List<Candle>, timeframe: String): List<Candle> {
         if (rows.isEmpty() || timeframe == "Daily") {
             return rows
         }
 
         val groups = linkedMapOf<String, Candle>()
+        val firstOpen = HashMap<String, Double?>()
 
         for (r in rows.sortedBy { it.date }) {
-            val d = java.time.LocalDate.parse(r.date)
+            val d = LocalDate.parse(r.date)
 
             val key =
                 if (timeframe == "Weekly") {
@@ -37,7 +40,11 @@ class ScannerEngine(private val db: AppDb) {
                     d.withDayOfMonth(1).toString()
                 }
 
-            groups[key] = r
+            if (!firstOpen.containsKey(key)) {
+                firstOpen[key] = r.open
+            }
+
+            groups[key] = Candle(r.date, r.close, firstOpen[key])
         }
 
         return groups.values.toList()
@@ -54,6 +61,40 @@ class ScannerEngine(private val db: AppDb) {
         } catch (_: Exception) {
             null
         }
+    }
+
+    // True when the price series satisfies the whole condition rule
+    // (AND is checked first, then OR). Used by tracking.
+    fun evaluateSeries(close: List<Double>, cfg: ScanConfig): Boolean {
+        if (close.isEmpty() || cfg.conditions.isEmpty()) return false
+
+        val cache = mutableMapOf<String, Double?>()
+
+        fun value(indicator: String, params: List<Double>): Double? {
+            val key = indicator + "|" + params.joinToString(",")
+
+            return cache.getOrPut(key) {
+                Indicators.valueAt(close, indicator, params)
+            }
+        }
+
+        val checks = cfg.conditions.map { c ->
+            val left = value(c.leftIndicator, c.leftParams)
+
+            val right =
+                if (c.rightIndicator == "Number") {
+                    c.rightTarget
+                } else {
+                    value(c.rightIndicator, c.rightParams)
+                }
+
+            ConditionEngine.evaluate(close, c, left, right)
+        }
+
+        return ConditionEngine.combine(
+            checks,
+            cfg.conditions.map { it.logic }
+        )
     }
 
     fun scan(
