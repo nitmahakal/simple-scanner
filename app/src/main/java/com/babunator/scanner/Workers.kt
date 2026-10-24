@@ -359,12 +359,18 @@ class AutoTrackingWorker(
             val symbols = db.symbols()
             val activeSavedScans = db.getAutoTrackSavedScans()
 
+            TrackingStore(db).deleteOrphans()
+
             if (activeSavedScans.isEmpty()) {
                 return Result.success()
             }
 
+            val engine = TrackingEngine(db)
+
             var trackedCount = 0
-            var matchedCount = 0
+            var entries = 0
+            var exits = 0
+            var signals = 0
 
             for (savedScan in activeSavedScans) {
 
@@ -376,50 +382,49 @@ class AutoTrackingWorker(
                     continue
                 }
 
-                val matches =
-                    ScannerEngine(db).scan(
-                        symbols,
-                        config
-                    )
+                // Scans with Near By / May Go To Cross conditions are
+                // watch-only and are not tracked.
+                if (!TrackingEngine.isTrackable(config)) {
+                    continue
+                }
 
-                val status =
-                    if (matches.isEmpty()) {
+                val result = engine.process(
+                    savedScan.id,
+                    config,
+                    symbols
+                )
+
+                db.saveTrackingRun(
+                    savedScanId = savedScan.id,
+                    matches = result.matches,
+                    status =
+                    if (result.matches.isEmpty()) {
                         "VOID"
                     } else {
                         "ACTIVE"
                     }
-
-                db.saveTrackingRun(
-                    savedScanId = savedScan.id,
-                    matches = matches,
-                    status = status
-                )
-                
-                updateOpenTrackingPositions(
-                    db = db,
-                    savedScanId = savedScan.id,
-                    matches = matches
-                )
-
-                closeMissingTrackingPositions(
-                    db = db,
-                    savedScanId = savedScan.id,
-                    matches = matches
                 )
 
                 trackedCount++
-                matchedCount += matches.size
+                entries += result.entries
+                exits += result.exits
+                signals += result.signals
             }
 
             showTrackingNotification(
                 applicationContext,
                 trackedCount,
-                matchedCount
+                entries,
+                exits,
+                signals
             )
+
             Result.success(
                 Data.Builder()
                     .putInt("tracked_scans", trackedCount)
-                    .putInt("matched_results", matchedCount)
+                    .putInt("entries", entries)
+                    .putInt("exits", exits)
+                    .putInt("signals", signals)
                     .build()
             )
 
@@ -427,140 +432,13 @@ class AutoTrackingWorker(
             Result.failure()
         }
     }
-    
-    private fun updateOpenTrackingPositions(
-        db: AppDb,
-        savedScanId: Long,
-        matches: List<Match>
-    ) {
-        val now = LocalDateTime.now().toString()
-
-        val existing =
-            db.getTrackingPositions(savedScanId)
-                .associateBy {
-                    "${it.symbol}|${it.timeframe}"
-                }
-
-        matches.forEach { match ->
-
-            val key =
-                "${match.symbol}|${match.timeframe}"
-
-            val old = existing[key]
-
-            if (old == null) {
-
-                db.upsertTrackingPosition(
-                    savedScanId = savedScanId,
-                    symbol = match.symbol,
-                    timeframe = match.timeframe,
-                    entryPrice = match.close,
-                    currentPrice = match.close,
-                    lowestPrice = match.close,
-                    pnl = 0.0,
-                    maxDownside = 0.0,
-                    status = "OPEN",
-                    opened = now,
-                    updated = now
-                )
-
-            } else {
-
-                val currentPrice = match.close
-
-                val lowestPrice =
-                    minOf(
-                        old.lowestPrice,
-                        currentPrice
-                    )
-
-                val pnl =
-                    if (old.entryPrice == 0.0) {
-                        0.0
-                    } else {
-                        (
-                            (currentPrice - old.entryPrice) /
-                                old.entryPrice
-                            ) * 100.0
-                    }
-
-                val maxDownside =
-                    if (old.entryPrice == 0.0) {
-                        0.0
-                    } else {
-                        (
-                            (lowestPrice - old.entryPrice) /
-                                old.entryPrice
-                            ) * 100.0
-                    }
-
-                db.upsertTrackingPosition(
-                    savedScanId = savedScanId,
-                    symbol = match.symbol,
-                    timeframe = match.timeframe,
-                    entryPrice = old.entryPrice,
-                    currentPrice = currentPrice,
-                    lowestPrice = lowestPrice,
-                    pnl = pnl,
-                    maxDownside = minOf(
-                        old.maxDownside,
-                        maxDownside
-                    ),
-                    status = "OPEN",
-                    opened = old.opened,
-                    updated = now
-                )
-            }
-        }
-    }
-    private fun closeMissingTrackingPositions(
-        db: AppDb,
-        savedScanId: Long,
-        matches: List<Match>
-    ) {
-        val now = LocalDateTime.now().toString()
-
-        val currentKeys =
-            matches
-                .map {
-                    "${it.symbol}|${it.timeframe}"
-                }
-                .toSet()
-
-        val existing =
-            db.getTrackingPositions(savedScanId)
-
-        existing.forEach { position ->
-
-            val key =
-                "${position.symbol}|${position.timeframe}"
-
-            if (key in currentKeys) {
-                return@forEach
-            }
-
-            val history =
-                db.getHistory(position.symbol)
-
-            val exitPrice =
-                history.lastOrNull()?.close
-                    ?: position.currentPrice
-                    ?: position.entryPrice
-
-            db.closeTrackingPosition(
-                savedScanId = savedScanId,
-                symbol = position.symbol,
-                timeframe = position.timeframe,
-                exitPrice = exitPrice,
-                closed = now
-            )
-        }
-    }
 
     private fun showTrackingNotification(
         context: Context,
         trackedCount: Int,
-        matchedCount: Int
+        entries: Int,
+        exits: Int,
+        signals: Int
     ) {
         val channelId = "scanner_tracking"
 
@@ -580,8 +458,9 @@ class AutoTrackingWorker(
         }
 
         val text =
-            "$trackedCount saved scan(s) checked, " +
-                    "$matchedCount match(es)"
+            "$trackedCount scan(s) tracked: " +
+                    "$entries entered, $exits exited, " +
+                    "$signals new signal(s)"
 
         val notification =
             NotificationCompat.Builder(
