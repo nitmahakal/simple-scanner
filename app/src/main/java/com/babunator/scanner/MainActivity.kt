@@ -1474,7 +1474,7 @@ root.addView(
                         db.runConditions(runId),
                     matches =
                         matches,
-                    autoTrack = false
+                    autoTrack = TrackingEngine.isTrackable(config)
                 )
 
             Toast.makeText(
@@ -1486,7 +1486,7 @@ root.addView(
     }
 
     root.addView(
-        saveButton,
+        saveButton.apply { visibility = android.view.View.GONE },
         lp()
     )
 
@@ -1964,7 +1964,7 @@ private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
                         db.runConditions(runId),
                     matches =
                         matches,
-                    autoTrack = false
+                    autoTrack = TrackingEngine.isTrackable(config)
                 )
 
                 Toast.makeText(
@@ -2632,6 +2632,31 @@ private fun formatInputNumber(
                         ).show()
 
                         showTrackingDetails(savedScanId)
+                    }
+                },
+                lp()
+            )
+        }
+        if (scan != null) {
+            root.addView(
+                Button(this).apply {
+                    text = "REMOVE FROM TRACKING"
+                    styleButton(this)
+                    setOnClickListener {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("Remove this scan from tracking?")
+                            .setMessage("The scan, its open positions and its tracking history will be deleted. This cannot be undone.")
+                            .setPositiveButton("REMOVE") { _, _ ->
+                                db.deleteSavedScan(savedScanId)
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Removed from tracking.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                showSavedScreen()
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
                     }
                 },
                 lp()
