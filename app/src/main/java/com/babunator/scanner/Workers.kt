@@ -33,7 +33,8 @@ class UpdateWorker(
             val limit = inputData.getInt("limit", 25)
 
             // true only for the scheduled daily run: after the last chunk,
-            // run the daily scan and then auto tracking on fresh data.
+            // a daily scan is saved first and then auto tracking runs.
+            // A manual update runs auto tracking only.
             val chain = inputData.getBoolean("chain", false)
 
             val part = symbols.drop(offset).take(limit)
@@ -154,9 +155,8 @@ class UpdateWorker(
                     )
                 )
 
-                if (chain) {
-                    enqueuePostUpdateChain()
-                }
+                // Every finished update refreshes auto tracking.
+                enqueuePostUpdateChain(chain)
 
             } else {
 
@@ -236,28 +236,40 @@ class UpdateWorker(
         return rows
     }
 
-    private fun enqueuePostUpdateChain() {
-        val scanRequest =
-            OneTimeWorkRequestBuilder<ScanWorker>()
-                .setInputData(
-                    Data.Builder()
-                        .putBoolean("chain", true)
-                        .build()
-                )
-                .build()
+    // withScan = true  (scheduled daily run): daily scan, then auto tracking.
+    // withScan = false (manual update)       : auto tracking only.
+    private fun enqueuePostUpdateChain(withScan: Boolean) {
+        val workManager = WorkManager.getInstance(applicationContext)
 
         val trackingRequest =
             OneTimeWorkRequestBuilder<AutoTrackingWorker>()
                 .build()
 
-        WorkManager.getInstance(applicationContext)
-            .beginUniqueWork(
+        if (withScan) {
+            val scanRequest =
+                OneTimeWorkRequestBuilder<ScanWorker>()
+                    .setInputData(
+                        Data.Builder()
+                            .putBoolean("chain", true)
+                            .build()
+                    )
+                    .build()
+
+            workManager
+                .beginUniqueWork(
+                    "nse_post_update",
+                    ExistingWorkPolicy.REPLACE,
+                    scanRequest
+                )
+                .then(trackingRequest)
+                .enqueue()
+        } else {
+            workManager.enqueueUniqueWork(
                 "nse_post_update",
                 ExistingWorkPolicy.REPLACE,
-                scanRequest
+                trackingRequest
             )
-            .then(trackingRequest)
-            .enqueue()
+        }
     }
 }
 
