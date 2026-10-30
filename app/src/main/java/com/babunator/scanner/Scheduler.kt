@@ -58,6 +58,21 @@ object Scheduler {
             )
     }
 
+    // Turns the daily auto update off: the saved time is removed and the
+    // waiting daily start is cancelled. A manual UPDATE DATA still works.
+    fun cancel(context: Context) {
+        context.getSharedPreferences(
+            PREF,
+            Context.MODE_PRIVATE
+        )
+            .edit()
+            .clear()
+            .apply()
+
+        WorkManager.getInstance(context)
+            .cancelUniqueWork(UNIQUE)
+    }
+
     fun rescheduleNext(context: Context) {
         val sp =
             context.getSharedPreferences(
