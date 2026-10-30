@@ -534,7 +534,38 @@ private fun showUpdateScreen() {
     
 
     root.addView(
-        autoCard,
+        autoCard.also { card ->
+            val scheduleOn =
+                getSharedPreferences("schedule", MODE_PRIVATE).contains("h")
+
+            if (scheduleOn) {
+                card.addView(
+                    Button(this).apply {
+                        text = "TURN OFF AUTO UPDATE"
+                        textSize = 14f
+                        minHeight = 52
+                        minimumHeight = 52
+                        setOnClickListener {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Turn off auto update?")
+                                .setMessage("The daily update, scan and tracking will stop running by themselves. You can still press UPDATE DATA by hand, which also refreshes tracking.")
+                                .setPositiveButton("TURN OFF") { _, _ ->
+                                    Scheduler.cancel(this@MainActivity)
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Auto update turned off.",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    showUpdateScreen()
+                                }
+                                .setNegativeButton("Cancel", null)
+                                .show()
+                        }
+                    },
+                    lp()
+                )
+            }
+        },
         lp()
     )
 
