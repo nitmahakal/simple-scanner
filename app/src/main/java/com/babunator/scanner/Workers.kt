@@ -287,70 +287,20 @@ class ScanWorker(
             val symbols = db.symbols()
             val matches = ScannerEngine(db).scan(symbols, cfg)
 
-            val savedTimeframes =
-                cfg.timeframes
-                    .ifEmpty { listOf(cfg.timeframe) }
-                    .distinct()
-                    .joinToString(", ")
+            val savedTimeframes = ConfigText.timeframesOf(cfg)
+            val savedConditions = ConfigText.describe(cfg)
 
-            val savedConditions = buildString {
-                append("TF = ")
-                append(savedTimeframes)
-                append("\n")
-                append("Logic = ")
-                append(cfg.logic)
-            
-                cfg.conditions.forEachIndexed { index, c ->
-                    append("\n")
-            
-                    append("Condition ")
-                    append(index + 1)
-            
-                    if (index > 0) {
-                        append(" [")
-                        append(c.logic)
-                        append("]")
-                    }
-            
-                    append(" = ")
-                    append(c.leftIndicator)
-            
-                    if (c.leftParams.isNotEmpty()) {
-                        append(
-                            c.leftParams.joinToString(
-                                prefix = "(",
-                                postfix = ")"
-                            )
-                        )
-                    }
-            
-                    append(" ")
-                    append(c.comparator)
-                    append(" ")
-                    append(c.rightIndicator)
-            
-                    if (c.rightParams.isNotEmpty()) {
-                        append(
-                            c.rightParams.joinToString(
-                                prefix = "(",
-                                postfix = ")"
-                            )
-                        )
-                    }
-            
-                    if (c.rightIndicator == "Number") {
-                        append(" ")
-                        append(c.rightTarget)
-                    }
-                }
-            }
-
-
-            db.saveRun(
+            val runId = db.saveRun(
                 savedTimeframes,
                 matches,
                 savedConditions
             )
+
+            // The real conditions of this scan, so it can be tracked later
+            // from the history.
+            val runConfigs = RunConfigStore(db)
+            runConfigs.save(runId, ScanConfigStore.toJson(cfg))
+            runConfigs.deleteOrphans()
 
             Result.success()
         } catch (_: Exception) {
