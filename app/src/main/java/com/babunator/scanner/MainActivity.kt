@@ -2668,7 +2668,8 @@ private fun formatInputNumber(
 
         root.addView(
             TextView(this).apply {
-                text = "OPEN TRACKING"
+                text = ""
+                visibility = android.view.View.GONE
                 textSize = 18f
                 setTypeface(
                     typeface,
@@ -2683,7 +2684,8 @@ private fun formatInputNumber(
 
             root.addView(
                 TextView(this).apply {
-                    text = "No open positions."
+                    text = ""
+                    visibility = android.view.View.GONE
                     textSize = 14f
                     setPadding(0, 0, 0, 12)
                 },
@@ -2692,7 +2694,7 @@ private fun formatInputNumber(
 
         } else {
 
-            openPositions.forEach { position ->
+            emptyList<AppDb.TrackingPosition>().forEach { position ->
 
                 val current =
                     position.currentPrice
@@ -2744,6 +2746,11 @@ private fun formatInputNumber(
                 )
             }
         }
+        root.addView(
+            TradeTables.build(this, db, savedScanId),
+            lp()
+        )
+
         val pendingSignals = TrackingStore(db).getPending(savedScanId)
 
                 if (pendingSignals.isNotEmpty()) {
