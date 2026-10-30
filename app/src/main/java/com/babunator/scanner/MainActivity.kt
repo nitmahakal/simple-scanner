@@ -1620,6 +1620,391 @@ private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
     updateMonitorJob?.cancel()
 
     content.removeAllViews()
+    setActiveNavigation(if (fromHistory) savedNavButton else scannerNavButton)
+
+    val root = verticalScroll()
+    val db = AppDb(this)
+
+    val runHeader =
+        db.recentRuns(30)
+            .firstOrNull {
+                it.startsWith("#$runId ")
+            }
+
+    val savedConditions = db.runConditions(runId)
+
+    val scanTime = runHeader
+        ?.removePrefix("#$runId  ")
+        ?.substringBefore("  ")
+        ?: "Unknown"
+
+    val savedTimeframes = savedConditions
+        .lineSequence()
+        .firstOrNull { it.startsWith("TF = ") }
+        ?.substringAfter("TF = ")
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: emptyList()
+
+    root.addView(
+        TextView(this).apply {
+            text = "SCAN RESULT"
+            textSize = 20f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 8, 0, 14)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = "Scan Time: $scanTime"
+            textSize = 14f
+            setPadding(0, 0, 0, 12)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = "Timeframes: " +
+                savedTimeframes.joinToString(", ")
+                    .ifEmpty { "Not saved" }
+            textSize = 14f
+            setPadding(0, 0, 0, 12)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            text = "SCAN CONDITIONS"
+            textSize = 16f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 0, 0, 8)
+        },
+        lp()
+    )
+
+    root.addView(
+        TextView(this).apply {
+            val conditionLines = savedConditions
+                .lineSequence()
+                .filterNot { it.startsWith("TF = ") }
+                .joinToString("\n")
+                .ifEmpty { "No saved conditions found." }
+
+            val logics = savedConditions
+                .lineSequence()
+                .map { it.trim() }
+                .filter { it.startsWith("Condition ") }
+                .map { if (it.substringBefore(" = ").contains("[OR]")) "OR" else "AND" }
+                .toList()
+
+            val rule = ConditionEngine.explain(logics)
+
+            text =
+                if (rule.isEmpty()) conditionLines
+                else conditionLines + "\n\n" + rule
+
+            textSize = 15f
+            setPadding(0, 0, 0, 12)
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.NORMAL
+            )
+        },
+        lp()
+    )
+
+    // ---------------- buttons (above the table) ----------------
+
+    fun addButton(title: String, action: () -> Unit) {
+        root.addView(
+            Button(this).apply {
+                text = title
+                styleButton(this)
+                setOnClickListener { action() }
+            },
+            lp()
+        )
+    }
+
+    addButton("TRACK THIS SCAN") {
+        // The conditions this scan was made with. Older scans did not keep
+        // them; from the scanner screen the last scanned conditions are used.
+        val config =
+            RunConfigStore(db).get(runId)
+                ?: if (fromHistory) null else ScanConfigStore.load(this@MainActivity)
+
+        if (config == null) {
+            Toast.makeText(
+                this@MainActivity,
+                "This older scan did not store its conditions, so it cannot be tracked. Run the scan again and track it from the result window.",
+                Toast.LENGTH_LONG
+            ).show()
+            return@addButton
+        }
+
+        val matches = db.resultMatches(runId)
+
+        if (matches.isEmpty()) {
+            Toast.makeText(
+                this@MainActivity,
+                "This scan has no matched stocks.",
+                Toast.LENGTH_SHORT
+            ).show()
+            return@addButton
+        }
+
+        val trackable = TrackingEngine.isTrackable(config)
+
+        db.saveSavedScan(
+            configJson = ScanConfigStore.toJson(config),
+            timeframe = ConfigText.timeframesOf(config),
+            conditions = db.runConditions(runId),
+            matches = matches,
+            autoTrack = trackable
+        )
+
+        Toast.makeText(
+            this@MainActivity,
+            if (trackable) {
+                "Scan added to tracking. Auto tracking is on."
+            } else {
+                "Scan added as watch-only. Near By / May Go To Cross conditions are not auto tracked."
+            },
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    if (fromHistory) {
+        addButton("DELETE THIS SCAN") {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Delete this scan?")
+                .setMessage("This scan will be removed from the history.")
+                .setPositiveButton("DELETE") { _, _ ->
+                    db.deleteRun(runId)
+                    RunConfigStore(db).deleteOrphans()
+                    showSavedScreen()
+                    showHistory()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    addButton(
+        if (fromHistory) "← BACK TO HISTORY" else "← BACK TO SCANNER"
+    ) {
+        if (fromHistory) {
+            showSavedScreen()
+            showHistory()
+        } else {
+            showScannerScreen()
+        }
+    }
+
+    // ---------------- matched stocks ----------------
+
+    root.addView(
+        TextView(this).apply {
+            text = "MATCHED STOCKS"
+            textSize = 16f
+            setTypeface(
+                typeface,
+                android.graphics.Typeface.BOLD
+            )
+            setPadding(0, 8, 0, 8)
+        },
+        lp()
+    )
+
+    val matches = db.resultMatches(runId)
+
+    val indicatorNames = linkedSetOf<String>()
+
+    val parsedRows = matches.map { match ->
+        val values = linkedMapOf<String, String>()
+
+        match.note
+            .substringAfter("\n\n", "")
+            .lines()
+            .forEach { line ->
+                if (line.startsWith("Close:")) {
+                    return@forEach
+                }
+
+                val separator = line.indexOf(": ")
+
+                if (separator > 0) {
+                    val name = line.substring(0, separator)
+                    val value = line.substring(separator + 2)
+
+                    values[name] = value
+                    indicatorNames.add(name)
+                }
+            }
+
+        match to values
+    }
+
+    val configuredTimeframes =
+        savedTimeframes
+            .ifEmpty { matches.map { it.timeframe }.distinct() }
+            .distinct()
+
+    val timeframesToShow =
+        (configuredTimeframes + matches.map { it.timeframe })
+            .distinct()
+
+    fun resultCell(
+        value: String,
+        header: Boolean = false
+    ): TextView {
+        return TextView(this).apply {
+            text = value
+            textSize = if (header) 13f else 14f
+
+            if (header) {
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+            }
+
+            setPadding(18, 12, 18, 12)
+            setSingleLine(true)
+
+            layoutParams = TableRow.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+    }
+
+    timeframesToShow.forEach { timeframe ->
+        root.addView(
+            TextView(this).apply {
+                text = timeframe
+                textSize = 17f
+                setTypeface(
+                    typeface,
+                    android.graphics.Typeface.BOLD
+                )
+                setPadding(0, 12, 0, 6)
+            },
+            lp()
+        )
+
+        val timeframeRows =
+            parsedRows.filter { (match, _) ->
+                match.timeframe == timeframe
+            }
+
+        if (timeframeRows.isEmpty()) {
+            root.addView(
+                TextView(this).apply {
+                    text = "No stocks matched in $timeframe."
+                    textSize = 14f
+                    setPadding(0, 4, 0, 12)
+                },
+                lp()
+            )
+        } else {
+            val columns = mutableListOf<String>().apply {
+                add("STOCK")
+                add("LTP")
+                addAll(indicatorNames)
+            }
+
+            val table = TableLayout(this).apply {
+                isStretchAllColumns = false
+                isShrinkAllColumns = false
+                setPadding(0, 0, 0, 12)
+            }
+
+            val headerRow = TableRow(this)
+
+            columns.forEach { column ->
+                headerRow.addView(
+                    resultCell(column, true)
+                )
+            }
+
+            table.addView(headerRow)
+
+            timeframeRows.forEach { (match, values) ->
+                val row = TableRow(this)
+
+                row.addView(resultCell(match.symbol))
+
+                row.addView(
+                    resultCell(
+                        String.format(
+                            Locale.US,
+                            "%.2f",
+                            match.close
+                        )
+                    )
+                )
+
+                indicatorNames.forEach { name ->
+                    val rawValue = values[name]
+
+                    val formattedValue =
+                        rawValue?.toDoubleOrNull()?.let {
+                            String.format(Locale.US, "%.2f", it)
+                        } ?: (rawValue ?: "—")
+
+                    row.addView(
+                        resultCell(formattedValue)
+                    )
+                }
+
+                table.addView(row)
+            }
+
+            val horizontalScroll =
+                HorizontalScrollView(this).apply {
+                    isFillViewport = false
+                    addView(table)
+                }
+
+            root.addView(
+                horizontalScroll,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
+        }
+    }
+
+    content.addView(root)
+}
+
+private fun showScanResultScreenOld(runId: Long, fromHistory: Boolean = false) {
+    backTarget = {
+        if (fromHistory) {
+            showSavedScreen()
+            showHistory()
+        } else {
+            showScannerScreen()
+        }
+    }
+
+    scanMonitorJob?.cancel()
+    updateMonitorJob?.cancel()
+
+    content.removeAllViews()
 
     setActiveNavigation(scannerNavButton)
 
