@@ -13,8 +13,10 @@ import java.time.LocalDateTime
  *  3. Exit signals are also carried out at the OPEN of the next candle:
  *       - stop-loss (fixed % below entry, checked on the candle close)
  *       - stop-loss condition
- *       - custom exit condition, or when none is set, the default exit:
- *         the entry conditions stop matching.
+ *       - custom exit condition, or when none is set:
+ *           * entry has Cross Above / Cross Below: the opposite cross
+ *             (Cross Above -> Cross Below and the other way round)
+ *           * otherwise the default exit: the entry conditions stop matching.
  *  4. After an exit by stop-loss or exit condition, a stock is not entered
  *     again until the entry conditions have turned false once.
  *
@@ -47,6 +49,31 @@ class TrackingEngine(private val db: AppDb) {
     )
 
     companion object {
+        private val crossFlip = mapOf(
+            "Cross Above" to "Cross Below",
+            "Cross Below" to "Cross Above"
+        )
+
+        // A cross is true only on the candle where it happens, so the
+        // default exit (entry conditions stop matching) would close the trade
+        // one candle later. For such scans the exit is the opposite cross of
+        // each cross condition (any one of them ends the trade).
+        fun oppositeCrossExit(config: ScanConfig): ScanConfig? {
+            val crosses =
+                config.conditions.filter { it.comparator in crossFlip }
+
+            if (crosses.isEmpty()) return null
+
+            val flipped = crosses.map {
+                it.copy(
+                    comparator = crossFlip.getValue(it.comparator),
+                    logic = "OR"
+                )
+            }
+
+            return config.copy(conditions = flipped)
+        }
+
         private val watchOnlyComparators = setOf(
             "Near By",
             "May Go To Cross Above",
@@ -87,6 +114,7 @@ class TrackingEngine(private val db: AppDb) {
         val rules = store.getRules(savedScanId)
         val exitConfig = parseRule(rules?.exitConfigJson)
         val stopLossConfig = parseRule(rules?.stopLossConfigJson)
+        val exitRule = exitConfig ?: oppositeCrossExit(config)
         val stopLossPercent =
             rules?.stopLossPercent?.takeIf { it > 0.0 && it < 100.0 }
 
@@ -185,6 +213,8 @@ class TrackingEngine(private val db: AppDb) {
                                     "Stop-loss"
                                 } else if (exitConfig != null) {
                                     "Exit condition"
+                                } else if (exitRule != null) {
+                                    "Opposite cross"
                                 } else {
                                     "Entry conditions ended"
                                 }
@@ -265,8 +295,8 @@ class TrackingEngine(private val db: AppDb) {
                                 scanner.evaluateSeries(closes, stopLossConfig)
                             ) {
                                 exitKind = "EXIT-SL"
-                            } else if (exitConfig != null) {
-                                if (fresh && scanner.evaluateSeries(closes, exitConfig)) {
+                            } else if (exitRule != null) {
+                                if (fresh && scanner.evaluateSeries(closes, exitRule)) {
                                     exitKind = "EXIT"
                                 }
                             } else if (!entryMatch) {
