@@ -16,6 +16,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 class UpdateWorker(
     appContext: Context,
@@ -27,7 +28,7 @@ class UpdateWorker(
 
         return try {
             val provider = DataProvider()
-            val symbols = provider.fetchSymbolList()
+            val symbols = loadSymbols(provider, db)
 
             val offset = inputData.getInt("offset", 0)
             val limit = inputData.getInt("limit", 25)
@@ -196,8 +197,47 @@ class UpdateWorker(
             )
 
         } catch (_: Exception) {
-            Result.failure()
+            if (runAttemptCount < 2) {
+                // Same chunk again after a short wait (it is safe to repeat).
+                Result.retry()
+            } else {
+                // The chain would stop here silently. Auto tracking still
+                // runs on the data that is already stored.
+                try {
+                    enqueuePostUpdateChain(
+                        inputData.getBoolean("chain", false)
+                    )
+                } catch (_: Exception) {
+                }
+
+                Result.failure()
+            }
         }
+    }
+
+    // NSE's symbol list server is sometimes slow: try 3 times, and if it
+    // still fails use the symbols already stored in the database.
+    private suspend fun loadSymbols(
+        provider: DataProvider,
+        db: AppDb
+    ): List<String> {
+
+        var lastError: Exception? = null
+
+        for (attempt in 1..3) {
+            try {
+                return provider.fetchSymbolList()
+            } catch (e: Exception) {
+                lastError = e
+                delay(2000L * attempt)
+            }
+        }
+
+        val stored = db.symbols()
+
+        if (stored.isNotEmpty()) return stored
+
+        throw lastError ?: IllegalStateException("No symbol list")
     }
 
     // First sync: full history. Later syncs: only data since the last stored
