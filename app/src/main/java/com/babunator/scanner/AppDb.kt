@@ -1,4 +1,4 @@
-classunator.scanner
+package com.babunator.scanner
 
 import android.content.ContentValues
 import android.content.Context
