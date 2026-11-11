@@ -12,7 +12,7 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8)
         // and tracking can run together).
         setWriteAheadLoggingEnabled(true)
     }
-null  override fun onCreate(db: SQLiteDatabase) {
+    override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             "CREATE TABLE prices(" +
                     "symbol TEXT NOT NULL, " +
