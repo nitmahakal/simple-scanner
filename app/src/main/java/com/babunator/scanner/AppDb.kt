@@ -1,4 +1,4 @@
-package com.babunator.scanner
+classunator.scanner
 
 import android.content.ContentValues
 import android.content.Context
@@ -7,7 +7,12 @@ import android.database.sqlite.SQLiteOpenHelper
 
 class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8) {
 
-    override fun onCreate(db: SQLiteDatabase) {
+    init {
+        // Readers and the writer no longer block each other (scan, update
+        // and tracking can run together).
+        setWriteAheadLoggingEnabled(true)
+    }
+null  override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             "CREATE TABLE prices(" +
                     "symbol TEXT NOT NULL, " +
