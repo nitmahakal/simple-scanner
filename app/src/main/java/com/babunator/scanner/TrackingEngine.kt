@@ -101,7 +101,29 @@ class TrackingEngine(private val db: AppDb) {
         return config
     }
 
+    // All writes of one scan go into a single transaction (one commit
+    // instead of thousands), which makes tracking much faster. The results
+    // are the same as before.
     fun process(
+        savedScanId: Long,
+        config: ScanConfig,
+        symbols: List<String>
+    ): Result {
+
+        val database = db.writableDatabase
+
+        database.beginTransaction()
+
+        try {
+            val result = processScan(savedScanId, config, symbols)
+            database.setTransactionSuccessful()
+            return result
+        } finally {
+            database.endTransaction()
+        }
+    }
+
+    private fun processScan(
         savedScanId: Long,
         config: ScanConfig,
         symbols: List<String>
