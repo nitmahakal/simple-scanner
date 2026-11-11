@@ -7,6 +7,7 @@ import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -62,7 +63,8 @@ class ScannerApp : Application() {
     }
 
     // Saves the reason of a crash to a file, so it can be shown on the
-    // next launch (and copied by the user).
+    // next launch (and copied or shared by the user). The text is kept
+    // short: very long texts cannot be copied or shared.
     private fun installCrashLogger() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
 
@@ -72,9 +74,11 @@ class ScannerApp : Application() {
                 error.printStackTrace(PrintWriter(writer))
 
                 File(filesDir, "last_crash.txt").writeText(
-                    java.time.LocalDateTime.now().toString() +
-                            "\n" +
-                            writer.toString()
+                    (
+                            java.time.LocalDateTime.now().toString() +
+                                    "\n" +
+                                    writer.toString()
+                            ).take(MAX_CRASH_CHARS)
                 )
             } catch (_: Throwable) {
             }
@@ -87,31 +91,47 @@ class ScannerApp : Application() {
         if (crashChecked) return
         crashChecked = true
 
-        val file = File(filesDir, "last_crash.txt")
-        if (!file.exists()) return
+        try {
+            val file = File(filesDir, "last_crash.txt")
+            if (!file.exists()) return
 
-        val text = try {
-            file.readText()
-        } catch (_: Exception) {
-            return
+            val text = file.readText().take(MAX_CRASH_CHARS)
+
+            file.delete()
+
+            AlertDialog.Builder(activity)
+                .setTitle("App closed unexpectedly last time")
+                .setMessage(text.take(4000))
+                .setPositiveButton("COPY") { _, _ ->
+                    try {
+                        val manager =
+                            activity.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as ClipboardManager
+
+                        manager.setPrimaryClip(
+                            ClipData.newPlainText("crash", text)
+                        )
+                    } catch (_: Throwable) {
+                    }
+                }
+                .setNeutralButton("SHARE") { _, _ ->
+                    try {
+                        val intent = Intent(Intent.ACTION_SEND)
+                        intent.type = "text/plain"
+                        intent.putExtra(Intent.EXTRA_TEXT, text)
+
+                        val chooser =
+                            Intent.createChooser(intent, "Send crash log")
+
+                        activity.startActivity(chooser)
+                    } catch (_: Throwable) {
+                    }
+                }
+                .setNegativeButton("CLOSE", null)
+                .show()
+
+        } catch (_: Throwable) {
         }
-
-        file.delete()
-
-        AlertDialog.Builder(activity)
-            .setTitle("App closed unexpectedly last time")
-            .setMessage(text.take(4000))
-            .setPositiveButton("COPY") { _, _ ->
-                val manager =
-                    activity.getSystemService(Context.CLIPBOARD_SERVICE)
-                            as ClipboardManager
-
-                manager.setPrimaryClip(
-                    ClipData.newPlainText("crash", text)
-                )
-            }
-            .setNegativeButton("CLOSE", null)
-            .show()
     }
 
     // Android 13+ needs runtime permission before notifications can be shown.
@@ -134,5 +154,9 @@ class ScannerApp : Application() {
             arrayOf(Manifest.permission.POST_NOTIFICATIONS),
             2001
         )
+    }
+
+    companion object {
+        private const val MAX_CRASH_CHARS = 20000
     }
 }
