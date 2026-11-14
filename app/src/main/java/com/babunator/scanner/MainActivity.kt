@@ -1422,6 +1422,8 @@ root.addView(
                         request
                     )
 
+                
+                WorkManager.getInstance(this@MainActivity).pruneWork()
                 text = "SCAN IN PROGRESS"
                 isEnabled = false
                 status.text =
@@ -1637,6 +1639,27 @@ root.addView(
     content.addView(root)
 }
 
+// A saved scan starts tracking from the stocks of the scan itself: the
+// engine runs once right now, so the matched stocks wait for the next
+// candle's open instead of being decided only at the next update.
+private fun seedNewTracking(config: ScanConfig, matches: List<Match>): Boolean {
+    try {
+        val seedDb = AppDb(this)
+        val saved = seedDb.getSavedScans().firstOrNull() ?: return true
+        val symbols = matches.map { it.symbol }.distinct()
+        val result = TrackingEngine(seedDb).process(saved.id, config, symbols)
+
+        seedDb.saveTrackingRun(
+            savedScanId = saved.id,
+            matches = result.matches,
+            status = if (result.matches.isEmpty()) "VOID" else "ACTIVE"
+        )
+    } catch (_: Exception) {
+    }
+
+    return true
+}
+
 private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
     backTarget = {
         if (fromHistory) {
@@ -1807,7 +1830,7 @@ private fun showScanResultScreen(runId: Long, fromHistory: Boolean = false) {
 
         Toast.makeText(
             this@MainActivity,
-            if (trackable) {
+            if (trackable && seedNewTracking(config, matches)) { 
                 "Scan added to tracking. Auto tracking is on."
             } else {
                 "Scan added as watch-only. Near By / May Go To Cross conditions are not auto tracked."
