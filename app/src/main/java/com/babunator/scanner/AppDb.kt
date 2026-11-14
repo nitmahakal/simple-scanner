@@ -351,6 +351,15 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8)
     // Keeps only the newest `keep` scans for every timeframe label
     // (for example "Daily", "Weekly", "Daily, Weekly") and removes the rest.
     fun deleteOldNormalScansKeepLast(keep: Int) {
+        // Cleanup is not urgent: if the database is busy (a scan, update
+        // or tracking is writing), it is tried again at the next start.
+        try {
+            deleteOldNormalScansKeepLastNow(keep)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun deleteOldNormalScansKeepLastNow(keep: Int) {
         if (keep < 1) return
 
         val db = writableDatabase
