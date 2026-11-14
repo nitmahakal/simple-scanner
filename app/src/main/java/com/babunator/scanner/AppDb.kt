@@ -290,7 +290,13 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8)
         cv.put("matched", matches.size)
         cv.put("conditions", conditions)
 
-        val id = writableDatabase.insert("runs", null, cv)
+        val database = writableDatabase
+
+        database.beginTransaction()
+
+        try {
+
+        val id = database.insert("runs", null, cv)
 
         for (m in matches) {
             val r = ContentValues()
@@ -303,7 +309,13 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8)
             writableDatabase.insert("results", null, r)
         }
 
+        database.setTransactionSuccessful()
+
         return id
+
+        } finally {
+            database.endTransaction()
+        }
     }
     fun deleteOldNormalScans(days: Int) {
         if (days < 1) return
