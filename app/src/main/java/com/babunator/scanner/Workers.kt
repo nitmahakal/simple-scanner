@@ -325,7 +325,21 @@ class ScanWorker(
             val db = AppDb(applicationContext)
             val cfg = ScanConfigStore.load(applicationContext)
             val symbols = db.symbols()
-            val matches = ScannerEngine(db).scan(symbols, cfg)
+            val engine = ScannerEngine(db)
+            val matches = engine.scan(symbols, cfg)
+
+            // Temporary: shows where the scan time went (for speed tuning).
+            val handler = android.os.Handler(android.os.Looper.getMainLooper())
+
+            for (delayMs in listOf(0L, 3500L)) {
+                handler.postDelayed({
+                    android.widget.Toast.makeText(
+                        applicationContext,
+                        engine.timingText,
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }, delayMs)
+            }
 
             val savedTimeframes = ConfigText.timeframesOf(cfg)
             val savedConditions = ConfigText.describe(cfg)
