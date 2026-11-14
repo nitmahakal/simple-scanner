@@ -161,6 +161,18 @@ private fun buildMainLayout() {
             ViewGroup.LayoutParams.WRAP_CONTENT
         )
     )
+    // Android 15+ draws the app behind the status bar and the navigation
+    // bar. Keep the screen and the bottom buttons inside the free area.
+    androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(main) { view, insets ->
+        val bars = insets.getInsets(
+            androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+        )
+
+        view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+
+        androidx.core.view.WindowInsetsCompat.CONSUMED
+    }
 
     setContentView(main)
 }
