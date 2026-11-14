@@ -101,9 +101,10 @@ class TrackingEngine(private val db: AppDb) {
         return config
     }
 
-    // All writes of one scan go into a single transaction (one commit
-    // instead of thousands), which makes tracking much faster. The results
-    // are the same as before.
+    // Writes go into transactions of 20 symbols each (a few commits instead of
+    // thousands, which makes tracking much faster). The write lock is held only
+    // for a short time at once, so the screen and other background work are
+    // not blocked. The results are the same as before.
     fun process(
         savedScanId: Long,
         config: ScanConfig,
@@ -115,7 +116,7 @@ class TrackingEngine(private val db: AppDb) {
         database.beginTransaction()
 
         try {
-            val result = processScan(savedScanId, config, symbols)
+            val result = processScan(database, savedScanId, config, symbols)
             database.setTransactionSuccessful()
             return result
         } finally {
@@ -124,6 +125,7 @@ class TrackingEngine(private val db: AppDb) {
     }
 
     private fun processScan(
+        database: android.database.sqlite.SQLiteDatabase,
         savedScanId: Long,
         config: ScanConfig,
         symbols: List<String>
@@ -163,7 +165,19 @@ class TrackingEngine(private val db: AppDb) {
         var exits = 0
         var signals = 0
 
+        var sinceCommit = 0
+
         for (symbol in symbols) {
+
+            // Commit the finished batch and start a new transaction.
+            if (sinceCommit >= 20) {
+                database.setTransactionSuccessful()
+                database.endTransaction()
+                database.beginTransaction()
+                sinceCommit = 0
+            }
+
+            sinceCommit++
 
             val history = db.getHistory(symbol)
 
