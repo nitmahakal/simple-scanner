@@ -2,6 +2,12 @@ package com.babunator.scanner
 
 import java.time.LocalDate
 import java.util.Locale
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 class ScannerEngine(private val db: AppDb) {
 
@@ -112,8 +118,6 @@ class ScannerEngine(private val db: AppDb) {
         cfg: ScanConfig
     ): List<Match> {
 
-        val hits = mutableListOf<Match>()
-
         val selectedTimeframes =
             cfg.timeframes
                 .ifEmpty { listOf(cfg.timeframe) }
@@ -124,76 +128,189 @@ class ScannerEngine(private val db: AppDb) {
         val logics = cfg.conditions.map { it.logic }
         val ruleText = ConditionEngine.explain(logics)
 
-        var historyNanos = 0L
-        var resampleNanos = 0L
-        var evalNanos = 0L
-        var candleCount = 0L
-        var symbolCount = 0
+        val historyNanos = AtomicLong(0L)
+        val resampleNanos = AtomicLong(0L)
+        val evalNanos = AtomicLong(0L)
+        val candleCount = AtomicLong(0L)
+        val symbolCount = AtomicInteger(0)
         val startAll = System.nanoTime()
 
-        for (s in symbols) {
+        // Symbols are scanned by a few threads at the same time (SQLite in WAL
+        // mode allows parallel reads). Every symbol is independent and the
+        // results are joined in the original symbol order, so the matches are
+        // exactly the same as with one thread.
+        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        val pool = Executors.newFixedThreadPool(threads)
 
-            val t0 = System.nanoTime()
-            val history = db.getHistory(s)
-            historyNanos += System.nanoTime() - t0
+        try {
+            val futures = ArrayList<Future<List<Match>>>(symbols.size)
 
-            if (history.isEmpty()) continue
+            for (s in symbols) {
+                futures.add(
+                    pool.submit(
+                        Callable<List<Match>> {
+                            scanSymbol(
+                                s,
+                                cfg,
+                                selectedTimeframes,
+                                cutoff,
+                                logics,
+                                ruleText,
+                                historyNanos,
+                                resampleNanos,
+                                evalNanos,
+                                candleCount,
+                                symbolCount
+                            )
+                        }
+                    )
+                )
+            }
 
-            if (cutoff != null) {
-                val lastDate = try {
-                    LocalDate.parse(history.last().date)
-                } catch (_: Exception) {
-                    null
-                }
+            val hits = mutableListOf<Match>()
 
-                if (lastDate != null && lastDate.isBefore(cutoff)) {
-                    continue
+            for (future in futures) {
+                try {
+                    hits += future.get()
+                } catch (e: ExecutionException) {
+                    throw (e.cause ?: e)
                 }
             }
 
-            symbolCount++
-            candleCount += history.size
+            timingText = String.format(
+                Locale.US,
+                "Scan %.1fs (%d threads) | history %.1fs | resample %.1fs | indicators %.1fs (summed over threads) | %d symbols, %d candles",
+                (System.nanoTime() - startAll) / 1e9,
+                threads,
+                historyNanos.get() / 1e9,
+                resampleNanos.get() / 1e9,
+                evalNanos.get() / 1e9,
+                symbolCount.get(),
+                candleCount.get()
+            )
 
-            for (timeframe in selectedTimeframes) {
+            return hits
+        } finally {
+            pool.shutdownNow()
+        }
+    }
 
-                val t1 = System.nanoTime()
-                val rows = resample(
-                    history,
-                    timeframe
+    private fun scanSymbol(
+        s: String,
+        cfg: ScanConfig,
+        selectedTimeframes: List<String>,
+        cutoff: LocalDate?,
+        logics: List<String>,
+        ruleText: String,
+        historyNanos: AtomicLong,
+        resampleNanos: AtomicLong,
+        evalNanos: AtomicLong,
+        candleCount: AtomicLong,
+        symbolCount: AtomicInteger
+    ): List<Match> {
+
+        val hits = mutableListOf<Match>()
+
+        val t0 = System.nanoTime()
+        val history = db.getHistory(s)
+        historyNanos.addAndGet(System.nanoTime() - t0)
+
+        if (history.isEmpty()) return hits
+
+        if (cutoff != null) {
+            val lastDate = try {
+                LocalDate.parse(history.last().date)
+            } catch (_: Exception) {
+                null
+            }
+
+            if (lastDate != null && lastDate.isBefore(cutoff)) {
+                return hits
+            }
+        }
+
+        symbolCount.incrementAndGet()
+        candleCount.addAndGet(history.size.toLong())
+
+        for (timeframe in selectedTimeframes) {
+
+            val t1 = System.nanoTime()
+            val rows = resample(
+                history,
+                timeframe
+            )
+            resampleNanos.addAndGet(System.nanoTime() - t1)
+
+            if (rows.isEmpty()) continue
+
+            val close = rows.map { it.close }
+
+            val t2 = System.nanoTime()
+
+            val checks = mutableListOf<Boolean>()
+
+            val currentValueCache =
+                mutableMapOf<String, Double?>()
+
+            fun cachedValue(
+                indicator: String,
+                params: List<Double>
+            ): Double? {
+
+                val key =
+                    indicator +
+                            "|" +
+                            params.joinToString(",")
+
+                return currentValueCache.getOrPut(key) {
+                    ConditionEngineValue.value(
+                        close,
+                        indicator,
+                        params
+                    )
+                }
+            }
+
+            for (condition in cfg.conditions) {
+
+                val leftValue = cachedValue(
+                    condition.leftIndicator,
+                    condition.leftParams
                 )
-                resampleNanos += System.nanoTime() - t1
 
-                if (rows.isEmpty()) continue
-
-                val close = rows.map { it.close }
-
-                val t2 = System.nanoTime()
-
-                val checks = mutableListOf<Boolean>()
-
-                val currentValueCache =
-                    mutableMapOf<String, Double?>()
-
-                fun cachedValue(
-                    indicator: String,
-                    params: List<Double>
-                ): Double? {
-
-                    val key =
-                        indicator +
-                                "|" +
-                                params.joinToString(",")
-
-                    return currentValueCache.getOrPut(key) {
-                        ConditionEngineValue.value(
-                            close,
-                            indicator,
-                            params
+                val rightValue =
+                    if (condition.rightIndicator == "Number") {
+                        condition.rightTarget
+                    } else {
+                        cachedValue(
+                            condition.rightIndicator,
+                            condition.rightParams
                         )
                     }
-                }
 
-                for (condition in cfg.conditions) {
+                val check = ConditionEngine.evaluate(
+                    series = close,
+                    c = condition,
+                    currentLeft = leftValue,
+                    currentRight = rightValue
+                )
+
+                checks += check
+            }
+
+            // AND is checked first, then OR (see ConditionEngine.combine).
+            val ok = ConditionEngine.combine(checks, logics)
+
+            evalNanos.addAndGet(System.nanoTime() - t2)
+
+            if (ok) {
+
+                // The text of a match is built only for matches
+                // (indicator values come from the cache).
+                val conditionDetails = mutableListOf<String>()
+                val indicatorValues = linkedMapOf<String, String>()
+
+                for ((index, condition) in cfg.conditions.withIndex()) {
 
                     val leftValue = cachedValue(
                         condition.leftIndicator,
@@ -210,115 +327,64 @@ class ScannerEngine(private val db: AppDb) {
                             )
                         }
 
-                    val check = ConditionEngine.evaluate(
-                        series = close,
-                        c = condition,
-                        currentLeft = leftValue,
-                        currentRight = rightValue
-                    )
-
-                    checks += check
-                }
-
-                // AND is checked first, then OR (see ConditionEngine.combine).
-                val ok = ConditionEngine.combine(checks, logics)
-
-                evalNanos += System.nanoTime() - t2
-
-                if (ok) {
-
-                    // The text of a match is built only for matches
-                    // (indicator values come from the cache).
-                    val conditionDetails = mutableListOf<String>()
-                    val indicatorValues = linkedMapOf<String, String>()
-
-                    for ((index, condition) in cfg.conditions.withIndex()) {
-
-                        val leftValue = cachedValue(
-                            condition.leftIndicator,
-                            condition.leftParams
-                        )
-
-                        val rightValue =
-                            if (condition.rightIndicator == "Number") {
-                                condition.rightTarget
-                            } else {
-                                cachedValue(
-                                    condition.rightIndicator,
-                                    condition.rightParams
-                                )
-                            }
-
-                        conditionDetails +=
-                            "Condition ${index + 1}: " +
-                                    "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
-                                    "${condition.comparator} " +
-                                    "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
-                                    if (condition.rightIndicator == "Number") {
-                                        " ${formatNumber(condition.rightTarget)}"
-                                    } else {
-                                        ""
-                                    }
-
-                        indicatorValues[
-                            "${condition.leftIndicator}${formatParams(condition.leftParams)}"
-                        ] = formatNumber(leftValue)
-
-                        if (condition.rightIndicator != "Number") {
-                            indicatorValues[
-                                "${condition.rightIndicator}${formatParams(condition.rightParams)}"
-                            ] = formatNumber(rightValue)
-                        }
-                    }
-
-                    val details = buildString {
-
-                        append(
-                            conditionDetails.joinToString("\n")
-                        )
-
-                        if (ruleText.isNotEmpty()) {
-                            append("\n")
-                            append(ruleText)
-                        }
-
-                        append("\n\n")
-
-                        append(
-                            "Close: ${formatNumber(close.last())}"
-                        )
-
-                        if (indicatorValues.isNotEmpty()) {
-                            append("\n")
-
-                            append(
-                                indicatorValues.entries.joinToString("\n") {
-                                    "${it.key}: ${it.value}"
+                    conditionDetails +=
+                        "Condition ${index + 1}: " +
+                                "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
+                                "${condition.comparator} " +
+                                "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
+                                if (condition.rightIndicator == "Number") {
+                                    " ${formatNumber(condition.rightTarget)}"
+                                } else {
+                                    ""
                                 }
-                            )
-                        }
+
+                    indicatorValues[
+                        "${condition.leftIndicator}${formatParams(condition.leftParams)}"
+                    ] = formatNumber(leftValue)
+
+                    if (condition.rightIndicator != "Number") {
+                        indicatorValues[
+                            "${condition.rightIndicator}${formatParams(condition.rightParams)}"
+                        ] = formatNumber(rightValue)
+                    }
+                }
+
+                val details = buildString {
+
+                    append(
+                        conditionDetails.joinToString("\n")
+                    )
+
+                    if (ruleText.isNotEmpty()) {
+                        append("\n")
+                        append(ruleText)
                     }
 
-                    hits += Match(
-                        symbol = s,
-                        timeframe = timeframe,
-                        close = close.last(),
-                        note = details
+                    append("\n\n")
+
+                    append(
+                        "Close: ${formatNumber(close.last())}"
                     )
+
+                    if (indicatorValues.isNotEmpty()) {
+                        append("\n")
+
+                        append(
+                            indicatorValues.entries.joinToString("\n") {
+                                "${it.key}: ${it.value}"
+                            }
+                        )
+                    }
                 }
+
+                hits += Match(
+                    symbol = s,
+                    timeframe = timeframe,
+                    close = close.last(),
+                    note = details
+                )
             }
         }
-
-        timingText = String.format(
-            Locale.US,
-            "Scan %.1fs | history %.1fs | resample %.1fs | indicators %.1fs | %d symbols, %d candles",
-            (System.nanoTime() - startAll) / 1e9,
-            historyNanos / 1e9,
-            resampleNanos / 1e9,
-            evalNanos / 1e9,
-            symbolCount,
-            candleCount
-        )
 
         return hits
     }
