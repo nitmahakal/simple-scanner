@@ -20,24 +20,31 @@ class ScannerEngine(private val db: AppDb) {
 
     // Weekly / Monthly candles: date and close come from the last day of the
     // period, open comes from the first day of the period.
+    // The period of a date is found with plain numbers (no date parsing),
+    // which is much faster and gives exactly the same groups.
     fun resample(rows: List<Candle>, timeframe: String): List<Candle> {
         if (rows.isEmpty() || timeframe == "Daily") {
             return rows
         }
 
-        val groups = linkedMapOf<String, Candle>()
-        val firstOpen = HashMap<String, Double?>()
+        val weekly = timeframe == "Weekly"
+
+        val groups = linkedMapOf<Long, Candle>()
+        val firstOpen = HashMap<Long, Double?>()
 
         for (r in rows.sortedBy { it.date }) {
-            val d = LocalDate.parse(r.date)
+            val year = r.date.substring(0, 4).toInt()
+            val month = r.date.substring(5, 7).toInt()
 
-            val key =
-                if (timeframe == "Weekly") {
-                    d.minusDays(
-                        (d.dayOfWeek.value - 1).toLong()
-                    ).toString()
+            val key: Long =
+                if (weekly) {
+                    val day = r.date.substring(8, 10).toInt()
+                    val epochDay = LocalDate.of(year, month, day).toEpochDay()
+
+                    // 1970-01-01 was a Thursday: this is the Monday-based week number.
+                    Math.floorDiv(epochDay + 3L, 7L)
                 } else {
-                    d.withDayOfMonth(1).toString()
+                    year * 12L + month
                 }
 
             if (!firstOpen.containsKey(key)) {
@@ -97,6 +104,9 @@ class ScannerEngine(private val db: AppDb) {
         )
     }
 
+    // Time spent in the last scan (shown briefly after a scan to find slow parts).
+    var timingText: String = ""
+
     fun scan(
         symbols: List<String>,
         cfg: ScanConfig
@@ -114,9 +124,18 @@ class ScannerEngine(private val db: AppDb) {
         val logics = cfg.conditions.map { it.logic }
         val ruleText = ConditionEngine.explain(logics)
 
+        var historyNanos = 0L
+        var resampleNanos = 0L
+        var evalNanos = 0L
+        var candleCount = 0L
+        var symbolCount = 0
+        val startAll = System.nanoTime()
+
         for (s in symbols) {
 
+            val t0 = System.nanoTime()
             val history = db.getHistory(s)
+            historyNanos += System.nanoTime() - t0
 
             if (history.isEmpty()) continue
 
@@ -132,20 +151,25 @@ class ScannerEngine(private val db: AppDb) {
                 }
             }
 
+            symbolCount++
+            candleCount += history.size
+
             for (timeframe in selectedTimeframes) {
 
+                val t1 = System.nanoTime()
                 val rows = resample(
                     history,
                     timeframe
                 )
+                resampleNanos += System.nanoTime() - t1
 
                 if (rows.isEmpty()) continue
 
                 val close = rows.map { it.close }
 
+                val t2 = System.nanoTime()
+
                 val checks = mutableListOf<Boolean>()
-                val conditionDetails = mutableListOf<String>()
-                val indicatorValues = linkedMapOf<String, String>()
 
                 val currentValueCache =
                     mutableMapOf<String, Double?>()
@@ -169,7 +193,7 @@ class ScannerEngine(private val db: AppDb) {
                     }
                 }
 
-                for ((index, condition) in cfg.conditions.withIndex()) {
+                for (condition in cfg.conditions) {
 
                     val leftValue = cachedValue(
                         condition.leftIndicator,
@@ -194,33 +218,58 @@ class ScannerEngine(private val db: AppDb) {
                     )
 
                     checks += check
-
-                    conditionDetails +=
-                        "Condition ${index + 1}: " +
-                                "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
-                                "${condition.comparator} " +
-                                "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
-                                if (condition.rightIndicator == "Number") {
-                                    " ${formatNumber(condition.rightTarget)}"
-                                } else {
-                                    ""
-                                }
-
-                    indicatorValues[
-                        "${condition.leftIndicator}${formatParams(condition.leftParams)}"
-                    ] = formatNumber(leftValue)
-
-                    if (condition.rightIndicator != "Number") {
-                        indicatorValues[
-                            "${condition.rightIndicator}${formatParams(condition.rightParams)}"
-                        ] = formatNumber(rightValue)
-                    }
                 }
 
                 // AND is checked first, then OR (see ConditionEngine.combine).
                 val ok = ConditionEngine.combine(checks, logics)
 
+                evalNanos += System.nanoTime() - t2
+
                 if (ok) {
+
+                    // The text of a match is built only for matches
+                    // (indicator values come from the cache).
+                    val conditionDetails = mutableListOf<String>()
+                    val indicatorValues = linkedMapOf<String, String>()
+
+                    for ((index, condition) in cfg.conditions.withIndex()) {
+
+                        val leftValue = cachedValue(
+                            condition.leftIndicator,
+                            condition.leftParams
+                        )
+
+                        val rightValue =
+                            if (condition.rightIndicator == "Number") {
+                                condition.rightTarget
+                            } else {
+                                cachedValue(
+                                    condition.rightIndicator,
+                                    condition.rightParams
+                                )
+                            }
+
+                        conditionDetails +=
+                            "Condition ${index + 1}: " +
+                                    "${condition.leftIndicator}${formatParams(condition.leftParams)} " +
+                                    "${condition.comparator} " +
+                                    "${condition.rightIndicator}${formatParams(condition.rightParams)}" +
+                                    if (condition.rightIndicator == "Number") {
+                                        " ${formatNumber(condition.rightTarget)}"
+                                    } else {
+                                        ""
+                                    }
+
+                        indicatorValues[
+                            "${condition.leftIndicator}${formatParams(condition.leftParams)}"
+                        ] = formatNumber(leftValue)
+
+                        if (condition.rightIndicator != "Number") {
+                            indicatorValues[
+                                "${condition.rightIndicator}${formatParams(condition.rightParams)}"
+                            ] = formatNumber(rightValue)
+                        }
+                    }
 
                     val details = buildString {
 
@@ -259,6 +308,17 @@ class ScannerEngine(private val db: AppDb) {
                 }
             }
         }
+
+        timingText = String.format(
+            Locale.US,
+            "Scan %.1fs | history %.1fs | resample %.1fs | indicators %.1fs | %d symbols, %d candles",
+            (System.nanoTime() - startAll) / 1e9,
+            historyNanos / 1e9,
+            resampleNanos / 1e9,
+            evalNanos / 1e9,
+            symbolCount,
+            candleCount
+        )
 
         return hits
     }
