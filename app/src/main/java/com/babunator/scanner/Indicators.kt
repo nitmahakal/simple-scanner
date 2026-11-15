@@ -642,6 +642,53 @@ object Indicators {
     // Main dispatcher
     // =========================================================
 
+        // Last value only. valueAt needs just the last value, so only the last
+    // window is calculated instead of the whole series. The arithmetic and
+    // its order are exactly the same as in wma() / hma(), so the number is
+    // identical.
+    private fun wmaAt(x: List<Double>, n: Int, i: Int): Double {
+        val denominator = n * (n + 1) / 2.0
+        var sum = 0.0
+
+        for (j in 0 until n) {
+            sum += x[i - n + 1 + j] * (j + 1)
+        }
+
+        return sum / denominator
+    }
+
+    fun wmaLast(x: List<Double>, n: Int): Double? {
+        if (n <= 0 || x.size < n) return null
+
+        return wmaAt(x, n, x.size - 1)
+    }
+
+    fun hmaLast(x: List<Double>, n: Int): Double? {
+        if (n <= 0 || x.isEmpty()) return null
+        if (n == 1) return x.last()
+
+        val half = max(1, n / 2)
+        val root = max(1, sqrt(n.toDouble()).roundToInt())
+
+        val last = x.size - 1
+
+        if (last < n + root - 2) return null
+        if (x.size < n || x.size < half) return null
+
+        val denominator = root * (root + 1) / 2.0
+        var sum = 0.0
+
+        for (j in 0 until root) {
+            val index = last - root + 1 + j
+            val a = wmaAt(x, half, index)
+            val b = wmaAt(x, n, index)
+
+            sum += (2.0 * a - b) * (j + 1)
+        }
+
+        return sum / denominator
+    }
+
     fun valueAt(x: List<Double>, name: String, p: List<Double>): Double? {
 
         fun intParam(index: Int): Int? {
@@ -661,11 +708,11 @@ object Indicators {
 
             "SMA" -> sma(x, intParam(0) ?: return null).lastOrNull()
 
-            "WMA" -> wma(x, intParam(0) ?: return null).lastOrNull()
+            "WMA" -> wmaLast(x, intParam(0) ?: return null)
 
             "EMA" -> ema(x, intParam(0) ?: return null).lastOrNull()
 
-            "HMA" -> hma(x, intParam(0) ?: return null).lastOrNull()
+            "HMA" -> hmaLast(x, intParam(0) ?: return null)
 
             "RSI" -> rsi(x, intParam(0) ?: return null).lastOrNull()
 
