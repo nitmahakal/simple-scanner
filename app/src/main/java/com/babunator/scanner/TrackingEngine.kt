@@ -3,6 +3,9 @@ package com.babunator.scanner
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
 
 /*
  * Tracking rules (one saved scan at a time):
@@ -33,6 +36,19 @@ class TrackingEngine(private val db: AppDb) {
         val entries: Int,
         val exits: Int,
         val signals: Int
+    )
+
+    // What the (parallel, read-only) first phase finds for one symbol and
+    // timeframe. The candles are kept only when the symbol has an open
+    // position or a waiting signal (they are needed for the writes).
+    private class TfData(
+        val timeframe: String,
+        val rows: List<Candle>?,
+        val latest: Candle,
+        val lastDone: Candle?,
+        val entryMatch: Boolean,
+        val exitMatch: Boolean,
+        val slMatch: Boolean
     )
 
     private val store = TrackingStore(db)
@@ -101,27 +117,83 @@ class TrackingEngine(private val db: AppDb) {
         return config
     }
 
-    // Writes go into transactions of 20 symbols each (a few commits instead of
-    // thousands, which makes tracking much faster). The write lock is held only
-    // for a short time at once, so the screen and other background work are
-    // not blocked. The results are the same as before.
+    // Phase 1 (history, indicators) runs on a few threads and writes nothing.
+    // Phase 2 (the rules and all writes) runs one symbol after another, in
+    // transactions of 20 symbols, so the write lock is held only for a short
+    // time at once. The results are the same as before.
     fun process(
         savedScanId: Long,
         config: ScanConfig,
         symbols: List<String>
     ): Result {
+        return processScan(db.writableDatabase, savedScanId, config, symbols)
+    }
 
-        val database = db.writableDatabase
+    private fun prepare(
+        symbol: String,
+        timeframes: List<String>,
+        config: ScanConfig,
+        exitRule: ScanConfig?,
+        stopLossConfig: ScanConfig?,
+        keepKeys: Set<String>,
+        cutoff: LocalDate?
+    ): List<TfData> {
 
-        database.beginTransaction()
+        val history = db.getHistory(symbol)
 
-        try {
-            val result = processScan(database, savedScanId, config, symbols)
-            database.setTransactionSuccessful()
-            return result
-        } finally {
-            database.endTransaction()
+        if (history.isEmpty()) return emptyList()
+
+        if (isStale(history.last().date, cutoff)) return emptyList()
+
+        val out = ArrayList<TfData>()
+
+        for (timeframe in timeframes) {
+
+            val allRows = scanner.resample(history, timeframe)
+
+            if (allRows.isEmpty()) continue
+
+            val doneRows = completedRows(allRows, timeframe)
+            val needed = keepKeys.contains(key(symbol, timeframe))
+
+            var lastDone: Candle? = null
+            var entryMatch = false
+            var exitMatch = false
+            var slMatch = false
+
+            if (doneRows.isNotEmpty()) {
+                val closes = doneRows.map { it.close }
+
+                lastDone = doneRows.last()
+                entryMatch = scanner.evaluateSeries(closes, config)
+
+                // Exit / stop-loss are needed only for symbols that have
+                // an open position or a waiting signal.
+                if (needed) {
+                    if (exitRule != null) {
+                        exitMatch = scanner.evaluateSeries(closes, exitRule)
+                    }
+
+                    if (stopLossConfig != null) {
+                        slMatch = scanner.evaluateSeries(closes, stopLossConfig)
+                    }
+                }
+            }
+
+            out.add(
+                TfData(
+                    timeframe,
+                    if (needed) allRows else null,
+                    allRows.last(),
+                    lastDone,
+                    entryMatch,
+                    exitMatch,
+                    slMatch
+                )
+            )
         }
+
+        return out
     }
 
     private fun processScan(
@@ -160,6 +232,40 @@ class TrackingEngine(private val db: AppDb) {
 
         val cutoff = staleCutoff()
 
+        // Phase 1: the heavy part, on a few threads, no writes.
+        val keepKeys = positions.keys + pendingMap.keys
+        val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        val pool = Executors.newFixedThreadPool(threads)
+
+        val prepared: List<List<TfData>> = try {
+            val futures = symbols.map { symbol ->
+                pool.submit(
+                    Callable<List<TfData>> {
+                        prepare(
+                            symbol,
+                            timeframes,
+                            config,
+                            exitRule,
+                            stopLossConfig,
+                            keepKeys,
+                            cutoff
+                        )
+                    }
+                )
+            }
+
+            futures.map {
+                try {
+                    it.get()
+                } catch (e: ExecutionException) {
+                    throw (e.cause ?: e)
+                }
+            }
+        } finally {
+            pool.shutdownNow()
+        }
+
+        // Phase 2: the rules and all writes, one symbol after another.
         val matches = mutableListOf<Match>()
         var entries = 0
         var exits = 0
@@ -167,7 +273,11 @@ class TrackingEngine(private val db: AppDb) {
 
         var sinceCommit = 0
 
-        for (symbol in symbols) {
+        database.beginTransaction()
+
+        try {
+
+        for ((symbolIndex, symbol) in symbols.withIndex()) {
 
             // Commit the finished batch and start a new transaction.
             if (sinceCommit >= 20) {
@@ -179,20 +289,11 @@ class TrackingEngine(private val db: AppDb) {
 
             sinceCommit++
 
-            val history = db.getHistory(symbol)
+            for (d in prepared[symbolIndex]) {
 
-            if (history.isEmpty()) continue
-
-            if (isStale(history.last().date, cutoff)) continue
-
-            for (timeframe in timeframes) {
-
-                val allRows = scanner.resample(history, timeframe)
-
-                if (allRows.isEmpty()) continue
-
-                val doneRows = completedRows(allRows, timeframe)
-                val latest = allRows.last()
+                val timeframe = d.timeframe
+                val allRows = d.rows ?: emptyList()
+                val latest = d.latest
                 val k = key(symbol, timeframe)
 
                 var position = positions[k]
@@ -285,11 +386,10 @@ class TrackingEngine(private val db: AppDb) {
                 }
 
                 // 2. Look for a new confirmed signal on the last completed candle.
-                if (doneRows.isNotEmpty()) {
-                    val closes = doneRows.map { it.close }
-                    val lastDone = doneRows.last()
+                val lastDone = d.lastDone
 
-                    val entryMatch = scanner.evaluateSeries(closes, config)
+                if (lastDone != null) {
+                    val entryMatch = d.entryMatch
 
                     if (entryMatch) {
                         matches += Match(symbol, timeframe, latest.close, "")
@@ -328,11 +428,11 @@ class TrackingEngine(private val db: AppDb) {
                                 exitKind = "EXIT-SL"
                             } else if (fresh &&
                                 stopLossConfig != null &&
-                                scanner.evaluateSeries(closes, stopLossConfig)
+                                d.slMatch
                             ) {
                                 exitKind = "EXIT-SL"
                             } else if (exitRule != null) {
-                                if (fresh && scanner.evaluateSeries(closes, exitRule)) {
+                                if (fresh && d.exitMatch) {
                                     exitKind = "EXIT"
                                 }
                             } else if (!entryMatch) {
@@ -428,6 +528,12 @@ class TrackingEngine(private val db: AppDb) {
                     }
                 }
             }
+        }
+
+        database.setTransactionSuccessful()
+
+        } finally {
+            database.endTransaction()
         }
 
         return Result(matches, entries, exits, signals)
