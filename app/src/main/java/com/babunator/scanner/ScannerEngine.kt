@@ -24,10 +24,36 @@ class ScannerEngine(private val db: AppDb) {
         "ICICIBANK"
     )
 
+    // Epoch day from year / month / day with plain integer arithmetic (no
+    // objects are created). Same value as LocalDate.of(...).toEpochDay().
+    private fun epochDay(year: Int, month: Int, day: Int): Long {
+        val y = if (month <= 2) year - 1 else year
+        val era = (if (y >= 0) y else y - 399) / 400
+        val yearOfEra = y - era * 400
+        val dayOfYear =
+            (153 * (month + (if (month > 2) -3 else 9)) + 2) / 5 + day - 1
+        val dayOfEra =
+            yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+
+        return era * 146097L + dayOfEra - 719468L
+    }
+
+    // Number from the digits of "yyyy-MM-dd" without creating substrings.
+    private fun digits(s: String, from: Int, count: Int): Int {
+        var v = 0
+
+        for (i in from until from + count) {
+            v = v * 10 + (s[i] - '0')
+        }
+
+        return v
+    }
+
     // Weekly / Monthly candles: date and close come from the last day of the
     // period, open comes from the first day of the period.
-    // The period of a date is found with plain numbers (no date parsing),
-    // which is much faster and gives exactly the same groups.
+    // The period of a date is found with plain numbers (no date parsing and
+    // no temporary objects), which is much faster and gives exactly the same
+    // candles as grouping the rows by week / month.
     fun resample(rows: List<Candle>, timeframe: String): List<Candle> {
         if (rows.isEmpty() || timeframe == "Daily") {
             return rows
@@ -35,32 +61,62 @@ class ScannerEngine(private val db: AppDb) {
 
         val weekly = timeframe == "Weekly"
 
-        val groups = linkedMapOf<Long, Candle>()
-        val firstOpen = HashMap<Long, Double?>()
+        // The rows come from the database already sorted by date.
+        var isSorted = true
 
-        for (r in rows.sortedBy { it.date }) {
-            val year = r.date.substring(0, 4).toInt()
-            val month = r.date.substring(5, 7).toInt()
+        for (i in 1 until rows.size) {
+            if (rows[i - 1].date > rows[i].date) {
+                isSorted = false
+                break
+            }
+        }
+
+        val source = if (isSorted) rows else rows.sortedBy { it.date }
+
+        val out = ArrayList<Candle>()
+
+        var currentKey = 0L
+        var started = false
+        var firstOpen: Double? = null
+        var last: Candle? = null
+
+        for (r in source) {
+            val year = digits(r.date, 0, 4)
+            val month = digits(r.date, 5, 2)
 
             val key: Long =
                 if (weekly) {
-                    val day = r.date.substring(8, 10).toInt()
-                    val epochDay = LocalDate.of(year, month, day).toEpochDay()
-
                     // 1970-01-01 was a Thursday: this is the Monday-based week number.
-                    Math.floorDiv(epochDay + 3L, 7L)
+                    Math.floorDiv(
+                        epochDay(year, month, digits(r.date, 8, 2)) + 3L,
+                        7L
+                    )
                 } else {
                     year * 12L + month
                 }
 
-            if (!firstOpen.containsKey(key)) {
-                firstOpen[key] = r.open
+            if (!started || key != currentKey) {
+                val previous = last
+
+                if (previous != null) {
+                    out.add(Candle(previous.date, previous.close, firstOpen))
+                }
+
+                currentKey = key
+                firstOpen = r.open
+                started = true
             }
 
-            groups[key] = Candle(r.date, r.close, firstOpen[key])
+            last = r
         }
 
-        return groups.values.toList()
+        val finalRow = last
+
+        if (finalRow != null) {
+            out.add(Candle(finalRow.date, finalRow.close, firstOpen))
+        }
+
+        return out
     }
 
     private fun staleCutoff(): LocalDate? {
