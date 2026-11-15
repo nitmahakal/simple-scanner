@@ -206,6 +206,29 @@ object Indicators {
         return emaNullable(rsi(series, rsiLength), emaLength)
     }
 
+    // Same number as smaOfRsi(...).lastOrNull(), but only the last window
+    // is summed (same arithmetic, same order).
+    private fun smaOfRsiLast(series: List<Double>, rsiLength: Int, smaLength: Int): Double? {
+        if (smaLength <= 0) return null
+
+        val values = rsi(series, rsiLength)
+
+        if (values.isEmpty()) return null
+
+        val i = values.size - 1
+
+        if (i < smaLength - 1) return null
+
+        var sum = 0.0
+
+        for (j in 0 until smaLength) {
+            val value = values[i - smaLength + 1 + j] ?: return null
+            sum += value
+        }
+
+        return sum / smaLength
+    }
+
     private fun smaOfRsi(series: List<Double>, rsiLength: Int, smaLength: Int): List<Double?> {
         return smaNullable(rsi(series, rsiLength), smaLength)
     }
@@ -246,7 +269,55 @@ object Indicators {
     // MACD
     // =========================================================
 
+    // MACD, MACD Signal and MACD Histogram of the same series and lengths
+    // need the same calculation. The last few results are remembered (per
+    // thread), so it is done only once. The numbers are not changed.
+    private class MacdMemo(
+        val x: List<Double>,
+        val fast: Int,
+        val slow: Int,
+        val signal: Int,
+        val result: Triple<List<Double?>, List<Double?>, List<Double?>>
+    )
+
+    private val macdMemos = ThreadLocal<ArrayList<MacdMemo>>()
+
     fun macd(
+        x: List<Double>,
+        fast: Int,
+        slow: Int,
+        signal: Int
+    ): Triple<List<Double?>, List<Double?>, List<Double?>> {
+
+        var memos = macdMemos.get()
+
+        if (memos == null) {
+            memos = ArrayList()
+            macdMemos.set(memos)
+        }
+
+        for (memo in memos) {
+            if (memo.x === x &&
+                memo.fast == fast &&
+                memo.slow == slow &&
+                memo.signal == signal
+            ) {
+                return memo.result
+            }
+        }
+
+        val result = macdCompute(x, fast, slow, signal)
+
+        memos.add(MacdMemo(x, fast, slow, signal, result))
+
+        if (memos.size > 4) {
+            memos.removeAt(0)
+        }
+
+        return result
+    }
+
+    fun macdCompute(
         x: List<Double>,
         fast: Int,
         slow: Int,
@@ -725,7 +796,7 @@ object Indicators {
             "SMA of RSI" -> {
                 val rsiLength = intParam(0) ?: return null
                 val smoothingLength = intParam(1) ?: return null
-                smaOfRsi(x, rsiLength, smoothingLength).lastOrNull()
+                smaOfRsiLast(x, rsiLength, smoothingLength)
             }
 
             "MACD" -> {
