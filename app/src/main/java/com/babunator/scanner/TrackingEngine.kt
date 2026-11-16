@@ -10,18 +10,19 @@ import java.util.concurrent.Executors
 /*
  * Tracking rules (one saved scan at a time):
  *
- *  1. A confirmed signal is seen on a COMPLETED candle (for Weekly and
- *     Monthly the running candle is not used).
- *  2. Entry happens at the OPEN of the next candle.
- *  3. Exit signals are also carried out at the OPEN of the next candle:
+ *  1. A tracked scan follows exactly the stocks of the scan result (all
+ *     timeframes). Every one of them enters at the OPEN of the next trading
+ *     day, so they all start on the same day. No other stock is added
+ *     later and a closed trade is not entered again.
+ *  2. Exit signals are seen on a COMPLETED candle of the stock's timeframe
+ *     (for Weekly and Monthly the running candle is not used).
+ *  3. Exit signals are carried out at the OPEN of the next candle:
  *       - stop-loss (fixed % below entry, checked on the candle close)
  *       - stop-loss condition
  *       - custom exit condition, or when none is set:
  *           * entry has Cross Above / Cross Below: the opposite cross
  *             (Cross Above -> Cross Below and the other way round)
  *           * otherwise the default exit: the entry conditions stop matching.
- *  4. After an exit by stop-loss or exit condition, a stock is not entered
- *     again until the entry conditions have turned false once.
  *
  * Every trade is written to the trade log (entry, exit, last price,
  * highest and lowest close), which the tracking tables show.
@@ -39,12 +40,13 @@ class TrackingEngine(private val db: AppDb) {
     )
 
     // What the (parallel, read-only) first phase finds for one symbol and
-    // timeframe. The candles are kept only when the symbol has an open
-    // position or a waiting signal (they are needed for the writes).
+    // timeframe of the tracked scan. entryCandle is the first daily candle
+    // after the waiting ENTRY signal (null while it has not come yet).
     private class TfData(
         val timeframe: String,
-        val rows: List<Candle>?,
+        val rows: List<Candle>,
         val latest: Candle,
+        val entryCandle: Candle?,
         val lastDone: Candle?,
         val entryMatch: Boolean,
         val exitMatch: Boolean,
@@ -117,16 +119,58 @@ class TrackingEngine(private val db: AppDb) {
         return config
     }
 
+    // Starts tracking of a scan: every stock of the scan result (all
+    // timeframes) gets a waiting ENTRY for the next trading day's open, so all
+    // of them start on the same day. Nothing else is added to this scan later.
+    fun seedBasket(savedScanId: Long, matches: List<Match>): Result {
+        val lastDates = HashMap<String, String>()
+        val items = mutableListOf<Pair<Match, String>>()
+
+        for (m in matches) {
+            val lastDate = lastDates.getOrPut(m.symbol) {
+                db.getHistory(m.symbol).lastOrNull()?.date ?: ""
+            }
+
+            if (lastDate.isNotEmpty()) {
+                items += Pair(m, lastDate)
+            }
+        }
+
+        val database = db.writableDatabase
+
+        database.beginTransaction()
+
+        try {
+            for ((m, lastDate) in items) {
+                store.upsertPending(
+                    savedScanId,
+                    m.symbol,
+                    m.timeframe,
+                    "ENTRY",
+                    lastDate
+                )
+            }
+
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+
+        return Result(items.map { it.first }, 0, 0, items.size)
+    }
+
+    // Only the stocks that have a waiting signal or an open position are
+    // looked at (a few hundred, not the whole market), so this is fast.
     // Phase 1 (history, indicators) runs on a few threads and writes nothing.
     // Phase 2 (the rules and all writes) runs one symbol after another, in
     // transactions of 20 symbols, so the write lock is held only for a short
-    // time at once. The results are the same as before.
+    // time at once. The symbols argument is not needed any more.
     fun process(
         savedScanId: Long,
         config: ScanConfig,
         symbols: List<String>
     ): Result {
-        return processScan(db.writableDatabase, savedScanId, config, symbols)
+        return processScan(db.writableDatabase, savedScanId, config)
     }
 
     private fun prepare(
@@ -136,6 +180,7 @@ class TrackingEngine(private val db: AppDb) {
         exitRule: ScanConfig?,
         stopLossConfig: ScanConfig?,
         keepKeys: Set<String>,
+        entrySignals: Map<String, String>,
         cutoff: LocalDate?
     ): List<TfData> {
 
@@ -149,12 +194,25 @@ class TrackingEngine(private val db: AppDb) {
 
         for (timeframe in timeframes) {
 
+            val k = key(symbol, timeframe)
+
+            // Only the stocks of this scan's list are tracked.
+            if (!keepKeys.contains(k)) continue
+
             val allRows = scanner.resample(history, timeframe)
 
             if (allRows.isEmpty()) continue
 
             val doneRows = completedRows(allRows, timeframe)
-            val needed = keepKeys.contains(key(symbol, timeframe))
+
+            val signalDate = entrySignals[k]
+
+            val entryCandle: Candle? =
+                if (signalDate == null) {
+                    null
+                } else {
+                    history.firstOrNull { it.date > signalDate }
+                }
 
             var lastDone: Candle? = null
             var entryMatch = false
@@ -167,24 +225,21 @@ class TrackingEngine(private val db: AppDb) {
                 lastDone = doneRows.last()
                 entryMatch = scanner.evaluateSeries(closes, config)
 
-                // Exit / stop-loss are needed only for symbols that have
-                // an open position or a waiting signal.
-                if (needed) {
-                    if (exitRule != null) {
-                        exitMatch = scanner.evaluateSeries(closes, exitRule)
-                    }
+                if (exitRule != null) {
+                    exitMatch = scanner.evaluateSeries(closes, exitRule)
+                }
 
-                    if (stopLossConfig != null) {
-                        slMatch = scanner.evaluateSeries(closes, stopLossConfig)
-                    }
+                if (stopLossConfig != null) {
+                    slMatch = scanner.evaluateSeries(closes, stopLossConfig)
                 }
             }
 
             out.add(
                 TfData(
                     timeframe,
-                    if (needed) allRows else null,
+                    allRows,
                     allRows.last(),
+                    entryCandle,
                     lastDone,
                     entryMatch,
                     exitMatch,
@@ -199,8 +254,7 @@ class TrackingEngine(private val db: AppDb) {
     private fun processScan(
         database: android.database.sqlite.SQLiteDatabase,
         savedScanId: Long,
-        config: ScanConfig,
-        symbols: List<String>
+        config: ScanConfig
     ): Result {
 
         if (!isTrackable(config)) {
@@ -232,8 +286,19 @@ class TrackingEngine(private val db: AppDb) {
 
         val cutoff = staleCutoff()
 
-        // Phase 1: the heavy part, on a few threads, no writes.
+        // The stocks of this scan: waiting for entry or in a trade.
         val keepKeys = positions.keys + pendingMap.keys
+
+        val symbols = keepKeys
+            .map { it.substringBefore('|') }
+            .distinct()
+            .sorted()
+
+        val entrySignals = pendingMap
+            .filter { it.value.kind == "ENTRY" }
+            .mapValues { it.value.signalDate }
+
+        // Phase 1: the heavy part, on a few threads, no writes.
         val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
         val pool = Executors.newFixedThreadPool(threads)
 
@@ -248,6 +313,7 @@ class TrackingEngine(private val db: AppDb) {
                             exitRule,
                             stopLossConfig,
                             keepKeys,
+                            entrySignals,
                             cutoff
                         )
                     }
@@ -292,7 +358,7 @@ class TrackingEngine(private val db: AppDb) {
             for (d in prepared[symbolIndex]) {
 
                 val timeframe = d.timeframe
-                val allRows = d.rows ?: emptyList()
+                val allRows = d.rows
                 val latest = d.latest
                 val k = key(symbol, timeframe)
 
@@ -304,7 +370,14 @@ class TrackingEngine(private val db: AppDb) {
                 val waiting = pending
 
                 if (waiting != null) {
-                    val next = allRows.firstOrNull { it.date > waiting.signalDate }
+                    // ENTRY: the next trading day's open (daily candle, whatever
+                    // the timeframe). EXIT: the next candle of the timeframe.
+                    val next =
+                        if (waiting.kind == "ENTRY") {
+                            d.entryCandle
+                        } else {
+                            allRows.firstOrNull { it.date > waiting.signalDate }
+                        }
 
                     if (next != null) {
                         val price = next.open ?: next.close
@@ -385,7 +458,7 @@ class TrackingEngine(private val db: AppDb) {
                     }
                 }
 
-                // 2. Look for a new confirmed signal on the last completed candle.
+                // 2. Look for an exit signal on the last completed candle.
                 val lastDone = d.lastDone
 
                 if (lastDone != null) {
@@ -405,16 +478,8 @@ class TrackingEngine(private val db: AppDb) {
                         val open = position
 
                         if (open == null) {
-                            if (entryMatch && !blocked.contains(k)) {
-                                store.upsertPending(
-                                    savedScanId,
-                                    symbol,
-                                    timeframe,
-                                    "ENTRY",
-                                    lastDone.date
-                                )
-                                signals++
-                            }
+                            // No new entries and no re-entry: a tracked scan
+                            // follows only the stocks it started with.
                         } else {
                             // Only candles from the entry candle onward count.
                             val fresh = lastDone.date >= open.opened.take(10)
