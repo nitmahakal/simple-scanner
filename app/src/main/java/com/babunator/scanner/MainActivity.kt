@@ -1659,7 +1659,7 @@ private fun seedNewTracking(config: ScanConfig, matches: List<Match>): Boolean {
         val seedDb = AppDb(this)
         val saved = seedDb.getSavedScans().firstOrNull() ?: return true
         val symbols = matches.map { it.symbol }.distinct()
-        val result = TrackingEngine(seedDb).process(saved.id, config, symbols)
+        val result = TrackingEngine(seedDb).seedBasket(saved.id, matches)
 
         seedDb.saveTrackingRun(
             savedScanId = saved.id,
