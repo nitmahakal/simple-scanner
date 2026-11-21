@@ -358,7 +358,7 @@ private fun showUpdateScreen() {
                 .setInputData(
                     Data.Builder()
                         .putInt("offset", 0)
-                        .putInt("limit", 25)
+                        .putInt("limit", 100)
                         .build()
                 )
                 .build()
