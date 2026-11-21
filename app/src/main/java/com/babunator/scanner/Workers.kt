@@ -31,7 +31,7 @@ class UpdateWorker(
             val symbols = loadSymbols(provider, db)
 
             val offset = inputData.getInt("offset", 0)
-            val limit = inputData.getInt("limit", 25)
+            val limit = inputData.getInt("limit", 100)
 
             // true only for the scheduled daily run: after the last chunk,
             // a daily scan is saved first and then auto tracking runs.
@@ -63,7 +63,7 @@ class UpdateWorker(
 
             for (s in part) {
 
-                val history = db.getHistory(s)
+                val history = db.getLastCandle(s)
                 val historyInitialized = db.isHistoryInitialized(s)
 
                 var updated = false
