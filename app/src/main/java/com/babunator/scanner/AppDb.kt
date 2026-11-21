@@ -241,7 +241,31 @@ class AppDb(context: Context) : SQLiteOpenHelper(context, "scanner.db", null, 8)
         )
     }
 
+    // Only the last stored candle (used by the update, which does not need
+    // the whole history). Returns an empty list when nothing is stored.
+    fun getLastCandle(symbol: String): List<Candle> {
+        val c = readableDatabase.rawQuery(
+            "SELECT date,close,open_price FROM prices WHERE symbol=? ORDER BY date DESC LIMIT 1",
+            arrayOf(symbol)
+        )
+
+        c.use {
+            if (it.moveToFirst()) {
+                return listOf(
+                    Candle(
+                        it.getString(0),
+                        it.getDouble(1),
+                        if (it.isNull(2)) null else it.getDouble(2)
+                    )
+                )
+            }
+        }
+
+        return emptyList()
+    }
+
     fun getHistory(symbol: String): List<Candle> {
+    
         val out = mutableListOf<Candle>()
 
         val c = readableDatabase.rawQuery(
