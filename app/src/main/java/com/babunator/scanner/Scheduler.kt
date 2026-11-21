@@ -120,7 +120,7 @@ object WorkChain {
                 .setInputData(
                     Data.Builder()
                         .putInt("offset", 0)
-                        .putInt("limit", 25)
+                        .putInt("limit", 100)
                         .putBoolean("chain", true)
                         .build()
                 )
